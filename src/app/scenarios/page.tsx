@@ -1,0 +1,4 @@
+import Link from 'next/link';
+import { scenarios } from '@/lib/scenarios';
+import styles from './scenarios.module.css';
+export default function ScenariosPage(){return <main className={styles.page}><nav className={styles.nav}><Link href="/">← 返回首页</Link><span>English Coach · 情景对话</span></nav><section className={styles.intro}><span>ENGLISH FOR REAL LIFE</span><h1>把英语，带进生活里。</h1><p>选一个熟悉的场景，从一段轻松的角色扮演开始。</p></section><div className={styles.grid}>{scenarios.map(scene=><Link href={'/scenarios/'+scene.slug} key={scene.slug} className={styles.card}><div className={styles.top}><span className={styles.icon}>{scene.icon}</span><span className={styles.level}>{scene.level}</span></div><h2>{scene.name}</h2><p>{scene.goal}</p><div className={styles.roles}>AI：{scene.aiRole} · 你：{scene.userRole}</div><div className={styles.action}>进入情景练习 <span>↗</span></div></Link>)}</div><p className={styles.note}>✧ 本地预设对话 · 免费练习 · 支持英语朗读</p></main>}

@@ -1,0 +1,8 @@
+.card{margin-top:8px;border:1px solid;border-radius:13px;font-size:11px;max-width:100%;overflow:hidden}
+.perfect{background:#f0f6ec;border-color:#dce8d4;color:#567249}.improve{background:#fbf6e9;border-color:#eee2c4;color:#8a713f}
+.card summary{display:flex;align-items:center;flex-wrap:wrap;gap:7px;min-height:40px;padding:9px 11px;cursor:pointer;list-style:none;touch-action:manipulation}.card summary::-webkit-details-marker{display:none}
+.card summary:focus-visible{outline:2px solid #7d9369;outline-offset:-3px;border-radius:12px}
+.badge{font-size:10px;border-radius:12px;padding:3px 7px;background:#ffffffa6}.arrow{margin-left:auto;transition:transform .15s}.card[open] .arrow{transform:rotate(180deg)}
+.body{padding:0 12px 12px;line-height:1.65}.label{font-size:10px;opacity:.85}.english{margin:5px 0 10px;font-size:14px;line-height:1.6;color:#46543d;overflow-wrap:anywhere;white-space:pre-wrap}.explanation{margin:6px 0 0;font-size:12px;overflow-wrap:anywhere}
+.status{margin-top:8px;font-size:10px;line-height:1.6;color:#929b88}
+@media(prefers-reduced-motion:reduce){.arrow{transition:none}}
