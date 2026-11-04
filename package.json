@@ -6,18 +6,19 @@
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
-    "typecheck": "tsc --noEmit"
-    ,"test:api": "node test-model.mjs"
+    "typecheck": "tsc --noEmit",
+    "test:api": "node test-model.mjs"
   },
   "dependencies": {
+    "msedge-tts": "^2.1.1",
     "next": "^15.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^22",
     "@types/react": "^19",
-    "@types/react-dom": "^19"
+    "@types/react-dom": "^19",
+    "typescript": "^5"
   }
 }

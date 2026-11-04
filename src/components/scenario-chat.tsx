@@ -8,6 +8,7 @@ import { addActivity } from '@/lib/activity-storage';
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { requestAiReply } from '@/lib/ai-client';
 import { useChatSpeech } from '@/hooks/use-chat-speech';
+import { ttsVoices } from '@/lib/tts-voices';
 import { ExpressionFeedbackCard } from '@/components/expression-feedback';
 
 export default function ScenarioChat({scene}: {scene: Scenario}) {
@@ -96,8 +97,8 @@ export default function ScenarioChat({scene}: {scene: Scenario}) {
    {isTyping && !messages[messages.length - 1]?.content && <div className={styles.typing} role="status">✳ 老师正在组织回复<span>•••</span></div>}
    </div>
   </div>
-  <div className={styles.composer}><p className={styles.hint}>✧ 每一次开口，都让你离自信更近一点。</p><div className={styles.speechControls}><button type="button" className={`${styles.autoSpeech} ${chatSpeech.enabled ? styles.autoSpeechOn : ''}`} aria-pressed={chatSpeech.enabled} disabled={!speechAvailable} onClick={chatSpeech.toggle} title="控制新回复生成后的自动朗读">{chatSpeech.enabled ? '🔊' : '🔇'} 自动发音 · {chatSpeech.enabled ? '开' : '关'}</button></div><form onSubmit={send} className={styles.inputBar}>
-   <button type="button" className={`${styles.mic} ${speechInput.listening ? styles.micListening : ''}`} aria-label={speechInput.listening ? '停止语音输入' : '开始语音输入'} onClick={() => { if (speechInput.listening) chatSpeech.prepare(); else stopSpeech(); speechInput.toggle(); }}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
+  <div className={styles.composer}><p className={styles.hint}>✧ 每一次开口，都让你离自信更近一点。</p><div className={styles.speechControls}><select className={styles.voiceSelect} aria-label="朗读音色" value={chatSpeech.voice} onChange={event => chatSpeech.selectVoice(event.target.value)}>{ttsVoices.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}</select><button type="button" className={`${styles.autoSpeech} ${chatSpeech.enabled ? styles.autoSpeechOn : ''}`} aria-pressed={chatSpeech.enabled} disabled={!speechAvailable} onClick={chatSpeech.toggle} title="控制新回复生成后的自动朗读">{chatSpeech.enabled ? '🔊' : '🔇'} 自动发音 · {chatSpeech.enabled ? '开' : '关'}</button></div><form onSubmit={send} className={styles.inputBar}>
+   <button type="button" className={`${styles.mic} ${speechInput.listening ? styles.micListening : ''}`} aria-label={speechInput.listening ? '停止语音输入' : '开始语音输入'} onClick={() => { chatSpeech.prepare(); speechInput.toggle(); }}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
    <label className={styles.srOnly} htmlFor="chat-message">输入英文消息</label><textarea id="chat-message" rows={2} maxLength={2000} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={handleKeyDown} placeholder="用英语回应，继续这个场景…" />
    <button type="submit" className={styles.send} disabled={!hydrated || !draft.trim() || isTyping} aria-label="发送消息">↑</button>
   </form><div className={styles.bottomLine}><span>{notice || (!speechAvailable ? '此浏览器不支持朗读 · 仍可文字练习' : '本地模拟 · 刷新重置 · Enter 发送')}</span><span>{draft.length}/2000</span></div><div className={styles.srOnly} role="status">{notice}</div></div>
