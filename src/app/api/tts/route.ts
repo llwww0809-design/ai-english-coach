@@ -1,5 +1,6 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
-import { defaultVoice, isTtsVoice } from '@/lib/tts-voices';
+import { defaultVoice } from '@/lib/tts-voices';
+import { DEFAULT_LEVEL, isLearningLevel, learningLevels } from '@/lib/level-config';
 
 export const runtime = 'nodejs';
 
@@ -7,10 +8,13 @@ const escapeXml = (text: string) => text.replace(/[&<>"']/g, char => ({ '&': '&a
 
 async function synthesize(request: Request, input: unknown) {
   if (!input || typeof input !== 'object') return Response.json({ error: '请提供朗读内容。' }, { status: 400 });
-  const { text, voice = defaultVoice } = input as Record<string, unknown>;
-  if (typeof text !== 'string' || !text.trim() || text.length > 4000 || !isTtsVoice(voice)) {
-    return Response.json({ error: '朗读内容须为 1–4000 字符，音色须为支持的三种音色之一。' }, { status: 400 });
+  const { text } = input as Record<string, unknown>;
+  const level = isLearningLevel((input as Record<string, unknown>).level) ? (input as Record<string, unknown>).level : DEFAULT_LEVEL;
+  if (typeof text !== 'string' || !text.trim() || text.length > 4000) {
+    return Response.json({ error: '朗读内容须为 1–4000 字符。' }, { status: 400 });
   }
+  const voice = defaultVoice;
+  const rate = learningLevels.find(item => item.id === level)?.ttsRate ?? '+0%';
   const tts = new MsEdgeTTS({ connectionTimeoutMs: 10000, synthesisTimeoutMs: 20000 });
   let audio: ReturnType<MsEdgeTTS['toStream']>['audioStream'] | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -23,7 +27,7 @@ async function synthesize(request: Request, input: unknown) {
       (async () => {
         await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
         if (request.signal.aborted) throw new Error('TTS request cancelled');
-        audio = tts.toStream(escapeXml(text.trim())).audioStream;
+        audio = tts.toStream(escapeXml(text.trim()), { rate }).audioStream;
         const chunks: Buffer[] = [];
         for await (const chunk of audio) chunks.push(Buffer.from(chunk));
         const result = Buffer.concat(chunks);
@@ -53,5 +57,5 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
-  return synthesize(request, { text: params.get('text'), voice: params.get('voice') ?? defaultVoice });
+  return synthesize(request, { text: params.get('text'), level: params.get('level') });
 }

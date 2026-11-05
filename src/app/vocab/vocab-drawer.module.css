@@ -1,0 +1,198 @@
+.wordGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 10px 4px 20px;
+}
+
+.wordCard {
+  display: flex;
+  min-width: 0;
+  min-height: 72px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 14px;
+  overflow: hidden;
+  border: 1px solid #e5e9e2;
+  border-radius: 12px;
+  background: #f6f8f5;
+  color: #303630;
+  text-align: left;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.wordCard:hover,
+.wordCard:focus-visible {
+  transform: translateY(-1px);
+  border-color: #cbd8c4;
+  background: #eef3eb;
+  outline: none;
+}
+
+.wordCard b,
+.wordCard small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wordCard b {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.wordCard small {
+  margin-top: 4px;
+  color: #788078;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sheetBackdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  background: #26332155;
+  animation: sheetFade 200ms ease;
+}
+
+.bottomSheet {
+  width: min(100%, 760px);
+  max-height: min(82dvh, 680px);
+  margin: 0 auto;
+  overflow: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+  border: 1px solid #e2e9dc;
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  background: #fffefa;
+  box-shadow: 0 -14px 50px #26332124;
+  animation: sheetUp 240ms ease;
+}
+
+.sheetHandle {
+  width: 38px;
+  height: 4px;
+  margin: 9px auto 2px;
+  border-radius: 99px;
+  background: #dce5d7;
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid #edf1e9;
+}
+
+.sheetHeader > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.sheetHeader h2 {
+  margin: 0 0 4px;
+  color: #465f40;
+  font: 400 28px/1.1 Georgia, serif;
+}
+
+.sheetHeader span {
+  color: #9aa590;
+  font-size: 11px;
+}
+
+.sheetSpeak,
+.sheetClose {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  place-items: center;
+  border: 1px solid #dce6d5;
+  border-radius: 9px;
+  background: #f3f7ef;
+  color: #678058;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sheetClose {
+  border: 0;
+  background: transparent;
+  color: #929d8c;
+  font-size: 22px;
+}
+
+.sheetContent {
+  display: grid;
+  gap: 16px;
+  padding: 17px 20px 8px;
+}
+
+.sheetContent section {
+  display: grid;
+  gap: 6px;
+}
+
+.sheetContent h3 {
+  margin: 0;
+  color: #8b9783;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.sheetFooter {
+  padding: 12px 20px 18px;
+}
+
+.sheetFooter button {
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  border-color: #5c774f;
+  background: #5c774f;
+  color: #fff;
+  font-size: 12px;
+}
+
+.sheetFooter button:hover {
+  background: #4e6944;
+}
+
+.sheetActions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.sheetFooter .secondaryAction { border: 1px solid #dce6d5; border-radius: 8px; background: #f2f6ed; color: #59744e; cursor: pointer; }
+.sheetFooter .secondaryAction:hover { background: #e8f0e0; }
+.sheetFooter button:disabled { opacity: .5; cursor: default; }
+.sheetHeader h2 { overflow-wrap: anywhere; }
+.bottomSheet:focus { outline: none; }
+
+@keyframes sheetFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (max-width: 520px) {
+  .wordGrid { gap: 10px; padding-right: 2px; padding-left: 2px; }
+  .wordCard { min-height: 68px; padding: 10px 12px; }
+  .bottomSheet { max-height: 88dvh; }
+  .sheetHeader,
+  .sheetContent,
+  .sheetFooter { padding-right: 16px; padding-left: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheetBackdrop,
+  .bottomSheet,
+  .wordCard { animation: none; transition: none; }
+}

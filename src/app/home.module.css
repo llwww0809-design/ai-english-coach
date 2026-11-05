@@ -1,0 +1,52 @@
+.page{max-width:880px;min-height:100dvh;margin:0 auto;padding:0 28px 130px;color:#2d3b2f}
+.header{min-height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e4e9df}
+.brand{font-size:17px;font-weight:700;color:#52694e}
+.level{display:flex;align-items:center;gap:10px;margin:0;color:#84907e;font-size:11px}
+.level select{min-height:40px;border:1px solid #dce5d5;border-radius:20px;padding:0 13px;background:#f4f7ee;color:#52694e;font-size:12px}
+.welcome{padding:42px 0 26px}
+.eyebrow{font-size:9px;letter-spacing:1.6px;color:#8c9a80}
+.welcome h1{font-size:28px;line-height:1.35;margin:13px 0 6px;letter-spacing:0}
+.welcome p{font-size:13px;color:#899285;margin:0}
+.today{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;background:#566e50;color:white;border-radius:20px;padding:25px}
+.today .eyebrow{color:#cbd7bf}
+.todayCopy h2{font-size:22px;margin:10px 0}
+.todayCopy p{color:#e1e8d8;font-size:12px;margin:0 0 18px}
+.todayCopy>button{min-height:44px;border-radius:12px;padding:0 16px;background:#f6f5e9;color:#40573d;font-size:12px}
+.todayCopy>button span{margin-left:18px}
+.progress{align-self:center;border-left:1px solid #ffffff33;padding-left:24px;display:flex;flex-direction:column;gap:7px}
+.progress strong{font-size:27px;font-weight:500}
+.progress strong small{font-size:13px;color:#d1dcc7}
+.progress>span{font-size:10px;color:#dbe4d3}
+.progress>div{height:5px;border-radius:9px;background:#ffffff33;margin:5px 0 0;overflow:hidden}
+.progress i{display:block;height:100%;border-radius:9px;background:#e3e8b8}
+.wordLink{align-self:flex-start;padding:5px 0;background:transparent;color:#f0f3df;font-size:10px}
+.recent{margin-top:32px}
+.recent>div{display:flex;align-items:center;justify-content:space-between}
+.recent h2{margin:6px 0 13px;font-size:18px}
+.recent>div>button{background:transparent;color:#6f805f;font-size:11px}
+.word{width:100%;min-height:72px;display:flex;align-items:center;gap:12px;padding:12px 16px;text-align:left;background:#fff;border:1px solid #e6ebe2;border-radius:13px}
+.word b{font:20px Georgia,serif;color:#536b4a}
+.word>span,.word small{font-size:10px;color:#929b8b}
+.word i{margin-left:auto;color:#6f805f;font-size:10px;font-style:normal}
+.empty{padding:22px;background:#fff;border-radius:13px;color:#8a9681;font-size:12px}
+.footer{margin-top:32px;text-align:center;color:#a3aa9b;font-size:9px;letter-spacing:1px}
+.footer span{padding:0 5px}
+@media(max-width:560px){
+  .page{padding:0 18px 110px}
+  .header{min-height:68px}
+  .brand{font-size:15px}
+  .welcome{padding:32px 0 21px}
+  .welcome h1{font-size:24px}
+  .today{grid-template-columns:1fr 110px;gap:12px;padding:20px 17px}
+  .todayCopy h2{font-size:19px}
+  .todayCopy p{font-size:11px}
+  .progress{padding-left:13px}
+  .progress strong{font-size:23px}
+  .word{gap:8px;flex-wrap:wrap}
+  .word i{margin-left:auto}
+}
+@media(max-width:360px){
+  .level{gap:5px}
+  .level span{display:none}
+  .today{grid-template-columns:1fr 95px}
+}

@@ -2,20 +2,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { speechText } from '@/lib/speech-text';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
-import { defaultVoice, isTtsVoice, type TtsVoice } from '@/lib/tts-voices';
+import { defaultVoice } from '@/lib/tts-voices';
+import { getUserLevel } from '@/lib/level-config';
+import { useUserLevel } from './use-user-level';
+import { AUTO_TTS_EVENT, AUTO_TTS_KEY } from '@/lib/speech-preferences';
 
-const KEY = 'english-coach.auto-tts.v1';
-const VOICE_KEY = 'english-coach.tts-voice.v1';
-const CHANGE = 'english-coach-auto-tts-change';
 type SpokenMessage = { id: number; content: string };
 
 export function useChatSpeech(onNotice: (text: string) => void) {
   const [enabled, setEnabled] = useState(true);
   const [available, setAvailable] = useState(false);
-  const [voice, setVoice] = useState<TtsVoice>(defaultVoice);
+  const { level } = useUserLevel();
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const enabledRef = useRef(true);
-  const voiceRef = useRef<TtsVoice>(defaultVoice);
   const noticeRef = useRef(onNotice); noticeRef.current = onNotice;
   const playing = useRef<number | null>(null);
   const token = useRef(0);
@@ -37,18 +36,18 @@ export function useChatSpeech(onNotice: (text: string) => void) {
     setAvailable(typeof Audio !== 'undefined');
     const load = () => {
       try {
-        const next = localStorage.getItem(KEY) !== 'false';
-        const storedVoice = localStorage.getItem(VOICE_KEY);
-        const nextVoice = isTtsVoice(storedVoice) ? storedVoice : defaultVoice;
-        if (!next || nextVoice !== voiceRef.current) stop();
-        enabledRef.current = next; setEnabled(next); voiceRef.current = nextVoice; setVoice(nextVoice);
+        const next = localStorage.getItem(AUTO_TTS_KEY) !== 'false';
+        if (!next) stop();
+        enabledRef.current = next; setEnabled(next);
       } catch { /* Preserve in-memory settings when storage is blocked. */ }
     };
     load();
-    const storage = (event: StorageEvent) => { if ([KEY, VOICE_KEY, null].includes(event.key)) load(); };
-    window.addEventListener('storage', storage); window.addEventListener(CHANGE, load); window.addEventListener('pagehide', stop);
-    return () => { window.removeEventListener('storage', storage); window.removeEventListener(CHANGE, load); window.removeEventListener('pagehide', stop); stop(); };
+    const storage = (event: StorageEvent) => { if ([AUTO_TTS_KEY, null].includes(event.key)) load(); };
+    window.addEventListener('storage', storage); window.addEventListener(AUTO_TTS_EVENT, load); window.addEventListener('pagehide', stop);
+    return () => { window.removeEventListener('storage', storage); window.removeEventListener(AUTO_TTS_EVENT, load); window.removeEventListener('pagehide', stop); stop(); };
   }, [stop]);
+
+  useEffect(() => { stop(); }, [level, stop]);
 
   const prepare = useCallback(() => {
     stop();
@@ -70,7 +69,7 @@ export function useChatSpeech(onNotice: (text: string) => void) {
     playing.current = message.id; setSpeakingId(message.id);
     noticeRef.current('正在生成自然语音…点击小喇叭可取消');
     try {
-      const response = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice: voiceRef.current }), signal: controller.signal });
+      const response = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice: defaultVoice, level: getUserLevel() }), signal: controller.signal });
       if (!response.ok) throw new Error('TTS request failed');
       const blob = await response.blob();
       if (controller.signal.aborted || generation !== token.current) return;
@@ -91,14 +90,8 @@ export function useChatSpeech(onNotice: (text: string) => void) {
   function toggle() {
     const next = !enabledRef.current; enabledRef.current = next; setEnabled(next);
     if (next) prepare(); else stop();
-    try { localStorage.setItem(KEY, String(next)); window.dispatchEvent(new Event(CHANGE)); noticeRef.current(next ? '自动发音已开启。' : '自动发音已关闭，仍可点击小喇叭朗读。'); }
+    try { localStorage.setItem(AUTO_TTS_KEY, String(next)); window.dispatchEvent(new Event(AUTO_TTS_EVENT)); noticeRef.current(next ? '自动发音已开启。' : '自动发音已关闭，仍可点击小喇叭朗读。'); }
     catch { noticeRef.current('设置仅对当前页面生效，浏览器暂时无法保存偏好。'); }
   }
-  function selectVoice(value: string) {
-    if (!isTtsVoice(value)) return;
-    stop(); voiceRef.current = value; setVoice(value);
-    try { localStorage.setItem(VOICE_KEY, value); window.dispatchEvent(new Event(CHANGE)); noticeRef.current('音色已切换，下次朗读生效。'); }
-    catch { noticeRef.current('音色已切换，但浏览器暂时无法保存偏好。'); }
-  }
-  return { enabled, available, voice, selectVoice, speakingId, stop, prepare, toggle, speak: (message: SpokenMessage) => { void play(message); }, autoSpeak: (message: SpokenMessage) => { void play(message, true); } };
+  return { enabled, available, level, speakingId, stop, prepare, toggle, speak: (message: SpokenMessage) => { void play(message); }, autoSpeak: (message: SpokenMessage) => { void play(message, true); } };
 }

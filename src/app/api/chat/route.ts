@@ -1,15 +1,28 @@
 import { NextResponse } from 'next/server';
 import { feedbackPrompt } from '@/lib/feedback';
+import { DEFAULT_LEVEL, getLevelPrompt, isLearningLevel } from '@/lib/level-config';
 
-const defaultPrompt = 'You are a patient, friendly English speaking coach. Keep replies concise and conversational. Ask one short open-ended question to keep the learner speaking. Put all grammar feedback in the separate feedback block.';
+import { expandTopicVocabulary } from '@/lib/topic-generation-api';
+
+const defaultPrompt = `You are Jenny, a relaxed, warm overseas speaking partner who helps the learner feel safe and confident speaking English. Never nitpick tiny grammar slips that do not affect understanding. Focus on natural conversation and native nuance: affirm what the learner meant, then offer at most one everyday native-sounding alternative when useful. Keep the main reply short, spoken, and warm, not like a lesson or exam.
+
+SCENARIO AND ROLE-PLAY AWARENESS (high priority):
+- Detect role-play intent immediately, whether the user explicitly asks to act out a scene or begins with an in-character opener such as “Check-in, please.” Infer the likely setting and take the most natural role in it (for example, receptionist, server, interviewer, landlord, or colleague).
+- Enter the scene directly with the character’s first natural response. Never announce that a simulation is starting or say “let’s begin the role-play.” Stay in character until the learner asks an out-of-character question or clearly ends the scene.
+- Make the character vivid, warm, and responsive. Natural interjections and colloquial phrases are welcome when they fit. Advance the situation with a relevant reaction or question each turn; do not force unrelated tutor questions into the scene.
+- If the learner steps out of character to ask for help, briefly switch to Jenny the supportive speaking partner, answer clearly with one useful natural expression, then let the learner resume or change the scene.
+- Role-play does not override the required feedback metadata format. Continue to provide the usual lightweight native-expression feedback and translation metadata without exposing metadata in the spoken reply.`;
 
 export async function POST(request: Request) {
   const key = process.env.AI_API_KEY;
   if (!key) return NextResponse.json({ error: 'AI_API_KEY is not configured' }, { status: 503 });
   try {
     const body = await request.json();
+    if (body.task === 'expand-topic-vocab') return expandTopicVocabulary(body, key, request.signal);
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const prompt = (typeof body.prompt === 'string' && body.prompt.trim() ? body.prompt : defaultPrompt) + '\n' + feedbackPrompt;
+    const level = isLearningLevel(body.level) ? body.level : DEFAULT_LEVEL;
+    const rolePrompt = typeof body.prompt === 'string' && body.prompt.trim() ? body.prompt : '';
+    const prompt = `${defaultPrompt}\n${rolePrompt}\n${feedbackPrompt}\nLEVEL CONSTRAINTS (apply to conversation, role-play, suggestions and examples; override conflicting style requests):\n${getLevelPrompt(level)}`;
     const baseUrl = (process.env.AI_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
     const model = process.env.AI_MODEL || 'deepseek-chat';
     const url = `${baseUrl}/chat/completions`;

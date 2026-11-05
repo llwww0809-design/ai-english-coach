@@ -4,7 +4,7 @@ import { loadTs } from './load-ts.mjs';
 const { FeedbackStream, parseFeedback } = await loadTs(new URL('../src/lib/feedback.ts', import.meta.url));
 const { requestAiReply } = await loadTs(new URL('../src/lib/ai-client.ts', import.meta.url));
 const { loadChat, saveChat } = await loadTs(new URL('../src/lib/chat-storage.ts', import.meta.url));
-const feedback = { status: 'improve', correction: 'I went shopping yesterday.', suggestion: 'I did some shopping yesterday.', explanation: 'yesterday 表示过去，应使用 went。' };
+const feedback = { status: 'improve', correction: 'I went shopping yesterday.', suggestion: 'I did some shopping yesterday.', explanation: 'yesterday 表示过去，应使用 went。', translation: '听起来不错！你买了什么？' };
 test('all token boundaries hide tags and JSON while preserving English deltas', () => {
   const raw = `That sounds fun! What did you buy?\n[FEEDBACK]${JSON.stringify(feedback)}[/FEEDBACK]`;
   for (let split = 0; split <= raw.length; split++) {
@@ -40,9 +40,10 @@ test('teacher and scene histories independently persist feedback and load old re
   const previous = globalThis.localStorage; const storage = new Map();
   globalThis.localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) };
   try {
-    const messages = [{ id: 1, role: 'user', content: 'I go shopping yesterday.', feedback }];
+    const messages = [{ id: 1, role: 'user', content: 'I go shopping yesterday.', feedback }, { id: 2, role: 'assistant', content: 'That sounds fun! What did you buy?', translation: feedback.translation }];
     saveChat(messages); saveChat([{ ...messages[0], content: 'One coffee, please.' }], 'cafe');
-    assert.deepEqual(loadChat()[0].feedback, feedback); assert.equal(loadChat('cafe')[0].content, 'One coffee, please.'); assert.equal(loadChat('hotel'), null);
+    assert.deepEqual(loadChat()[0].feedback, feedback); assert.equal(loadChat()[1].translation, feedback.translation); assert.equal(loadChat('cafe')[0].content, 'One coffee, please.'); assert.equal(loadChat('hotel'), null);
+    storage.set('english-coach.teacher-chat.v1', JSON.stringify([{ id: 4, role: 'assistant', content: 'Older message.' }])); assert.equal(loadChat()[0].translation, undefined);
     saveChat([{ id: 0, role: 'assistant', content: 'Hello!' }]); assert.equal(loadChat()[0].feedback, undefined);
     saveChat([{ id: 1, role: 'user', content: 'Hello!', feedbackState: 'pending' }]); assert.equal(loadChat()[0].feedbackState, 'unavailable');
   } finally { globalThis.localStorage = previous; }

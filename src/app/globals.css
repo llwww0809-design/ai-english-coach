@@ -5,3 +5,4 @@ button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation
 @supports (padding: max(0px)) {
   .mobile-nav { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 }
+:root{--global-nav-height:calc(67px + max(9px, env(safe-area-inset-bottom, 0px)));}
