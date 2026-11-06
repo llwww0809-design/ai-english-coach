@@ -15,14 +15,31 @@ async function synthesize(request: Request, input: unknown) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return Response.json({ error: '语音服务尚未配置，请设置 OPENAI_API_KEY。' }, { status: 503 });
 
+  const controller = new AbortController();
+  const cancel = () => controller.abort(request.signal.reason);
+  request.signal.addEventListener('abort', cancel, { once: true });
+  if (request.signal.aborted) cancel();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error('OpenAI TTS exceeded the 8000ms deadline');
+      reject(error); controller.abort(error);
+    }, 8000);
+  });
+  const startedAt = Date.now();
   try {
-    const client = new OpenAI({ apiKey, ...(process.env.OPENAI_BASE_URL?.trim() ? { baseURL: process.env.OPENAI_BASE_URL.trim() } : {}), timeout: 35000, maxRetries: 0 });
+    const client = new OpenAI({ apiKey, ...(process.env.OPENAI_BASE_URL?.trim() ? { baseURL: process.env.OPENAI_BASE_URL.trim() } : {}), timeout: 8000, maxRetries: 0 });
+    console.log('[TTS Upstream Start]:', { host: new URL(client.baseURL).host, model: 'tts-1', timeoutMs: 8000 });
     // Always use an official OpenAI voice, including for legacy Jenny callers.
-    const speech = await client.audio.speech.create({
-      model: 'tts-1', voice: 'nova', input: text.trim(), speed, response_format: 'mp3',
-    }, { signal: request.signal });
-    const bytes = await speech.arrayBuffer();
+    const bytes = await Promise.race([(async () => {
+      const speech = await client.audio.speech.create({
+        model: 'tts-1', voice: 'nova', input: text.trim(), speed, response_format: 'mp3',
+      }, { signal: controller.signal });
+      console.log('[TTS Upstream Response]:', { elapsedMs: Date.now() - startedAt });
+      return speech.arrayBuffer();
+    })(), deadline]);
     if (!bytes.byteLength) throw new Error('Empty speech response');
+    console.log('[TTS Synthesis Complete]:', { bytes: bytes.byteLength, elapsedMs: Date.now() - startedAt });
     return new Response(bytes, {
       headers: {
         'Content-Type': 'audio/mpeg',
@@ -34,9 +51,11 @@ async function synthesize(request: Request, input: unknown) {
       },
     });
   } catch (error) {
-    if (request.signal.aborted) return Response.json({ error: '语音请求已取消。' }, { status: 499 });
     console.error('[TTS API] OpenAI speech synthesis failed', error);
-    return Response.json({ error: '语音合成暂不可用，请稍后重试。' }, { status: 502 });
+    return Response.json({ error: '语音合成暂不可用，请稍后重试。' }, { status: 500 });
+  } finally {
+    clearTimeout(timer);
+    request.signal.removeEventListener('abort', cancel);
   }
 }
 

@@ -34,15 +34,20 @@ test('shared fetch rejects invalid audio and enforces timeout without cancelling
       assert.deepEqual(JSON.parse(init.body),{speed:0.9,text:'Hello'});
       return new Response('{}',{headers:{'Content-Type':'application/json'}});
     };
-    await assert.rejects(fetchSpeech('Hello',caller.signal),/Invalid MP3/);
+    await assert.rejects(fetchSpeech('Hello',caller.signal),error=>canFallbackSpeech(error) && /Invalid MP3/.test(error.message));
     for (const status of [400,401,404,500,502,503]) {
       globalThis.fetch=async()=>new Response('{}',{status});
-      await assert.rejects(fetchSpeech('Hello',caller.signal),error=>canFallbackSpeech(error)===(status>=500));
+      await assert.rejects(fetchSpeech('Hello',caller.signal),error=>canFallbackSpeech(error)===true);
     }
     assert.equal(canFallbackSpeech(new Error('NotAllowedError')),false);
-    globalThis.setTimeout=fn=>originalTimer(fn,1);
+    globalThis.setTimeout=(fn,ms)=>{ assert.equal(ms,8000); return originalTimer(fn,1); };
     globalThis.fetch=(_url,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('timeout')),{once:true}));
     await assert.rejects(fetchSpeech('Hello',caller.signal),/timeout/);
     assert.equal(caller.signal.aborted,false,'timeout remains distinct from user stop');
+    // Some proxies return headers and then never finish the MP3 body.
+    globalThis.fetch=async()=>({status:200,headers:new Headers({'Content-Type':'audio/mpeg'}),blob:()=>new Promise(()=>{})});
+    await assert.rejects(fetchSpeech('Hello',caller.signal),error=>canFallbackSpeech(error) && /timeout/.test(error.message));
+    globalThis.fetch=()=>new Promise(()=>{});
+    await assert.rejects(fetchSpeech('Hello',caller.signal),/timeout/);
   } finally {globalThis.fetch=originalFetch;globalThis.setTimeout=originalTimer;}
 });

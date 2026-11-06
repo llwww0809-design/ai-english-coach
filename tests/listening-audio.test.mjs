@@ -8,7 +8,7 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
   const keys = ['window', 'fetch', 'navigator', 'MediaMetadata', '__listenAudioTest', 'SpeechSynthesisUtterance'];
   const originals = Object.fromEntries(keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   const slots = [], cleanups = [], actions = new Map(), requests = [];
-  let cursor = 0, delayed = false, complete, failFetch = false, rejectPlay = false;
+  let cursor = 0, delayed = false, complete, failFetch = false, rejectPlay = false, hangFetch = false;
   const spoken = [];
   const media = {
     src: '', duration: 30, currentTime: 0, readyState: 1, playbackRate: 1, ended: false, paused: true,
@@ -43,7 +43,8 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     install('fetch', async (_url, init) => {
       assert.equal(_url, '/api/tts'); assert.equal(init.method, 'POST');
       requests.push(JSON.parse(init.body));
-      if (failFetch) return new Response('{}', {status:502});
+      if (hangFetch) return new Promise(()=>{});
+      if (failFetch) return new Response('{}', {status:500});
       const response = () => new Response(new Blob(['audio']), { headers: { 'Content-Type': 'audio/mpeg' } });
       if (delayed) { delayed = false; return new Promise(resolve => { complete = () => resolve(response()); }); }
       return response();
@@ -109,6 +110,14 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     hook.pause(); rejectPlay = true; await hook.toggle(); hook = render();
     assert.equal(spoken.length, beforeSpeech, 'Blocked Audio.play must not switch to native speech');
     assert.equal(hook.state, 'paused'); assert.ok(hook.error);
+    const timer = globalThis.setTimeout;
+    try {
+      globalThis.setTimeout=(fn,ms,...args)=>timer(fn,ms===8000 ? 1 : ms,...args);
+      hangFetch=true; hook.preview('timeout fallback'); await tick(); hook=render();
+      assert.equal(spoken.at(-1).text,'timeout fallback');
+      assert.notEqual(hook.state,'loading','Timeout releases the loading button');
+      spoken.at(-1).onend(); hook=render(); assert.equal(hook.state,'paused');
+    } finally { globalThis.setTimeout=timer; }
     for (const cleanup of cleanups) cleanup?.();
     assert.equal(media.paused, true); assert.equal(media.src, ''); assert.equal(media.ontimeupdate, null);
     for (const action of ['play', 'pause', 'previoustrack', 'nexttrack']) assert.equal(actions.get(action), null);

@@ -35,13 +35,21 @@ export async function fetchSpeech(text: string, signal: AbortSignal, options: Re
   const abort = () => controller.abort();
   signal.addEventListener('abort', abort, { once: true });
   if (signal.aborted) abort();
-  const timeout = setTimeout(abort, 45000);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new SpeechServiceError('TTS request timeout after 8000ms', true));
+      controller.abort();
+    }, 8000);
+  });
   try {
-    const response = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal, body: JSON.stringify({ speed: 0.9, ...options, text }) });
-    if (!response.ok) throw new SpeechServiceError('TTS unavailable: ' + response.status, response.status >= 500);
-    const blob = await response.blob();
-    if (!blob.size || !response.headers.get('content-type')?.includes('audio/mpeg')) throw new Error('Invalid MP3');
-    return { response, blob };
+    return await Promise.race([(async () => {
+      const response = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal, body: JSON.stringify({ speed: 0.9, ...options, text }) });
+      if (response.status !== 200) throw new SpeechServiceError('TTS unavailable: ' + response.status, true);
+      const blob = await response.blob();
+      if (!blob.size || !response.headers.get('content-type')?.includes('audio/mpeg')) throw new SpeechServiceError('Invalid MP3', true);
+      return { response, blob };
+    })(), deadline]);
   } catch (error) {
     if (!signal.aborted && (controller.signal.aborted || error instanceof TypeError)) {
       throw new SpeechServiceError(controller.signal.aborted ? 'TTS request timeout' : 'TTS network unavailable', true);
