@@ -46,7 +46,7 @@ test('appended words persist, deduplicate and retain mastery and bank details ac
   vocab.addToBank(saved);
   assert.deepEqual(vocab.getBankList()[0].collocations, extra.collocations);
   assert.equal(vocab.getBankList()[0].exampleEn, extra.exampleEn);
-  assert.ok(values.has(extraKey));
+  assert.ok(values.has(`expanded_topic_words_${base.id}_L1`));
   assert.ok(events.includes(vocab.VOCAB_UPDATED_EVENT));
 });
 
@@ -61,6 +61,58 @@ test('corrupt storage is safe and failed writes never report successful expansio
   assert.throws(() => vocab.appendTopicWords('coffee-dining', 'L1', [{ ...words[0], word: 'test spoon' }]), /存储/);
   assert.equal(vocab.getTopicPacks('L1')[0].words.length, count);
   assert.throws(() => vocab.appendTopicWords('coffee-dining', 'L1', [{ ...words[0], level: 'L5' }]));
+});
+
+test('topic and level partitions survive reloads and subsequent appends independently', async () => {
+  const { values } = browser();
+  const packs = vocab.getTopicPacks('L1');
+  const first = { ...words[0], word: 'test spoon' };
+  vocab.appendTopicWords(packs[0].id, 'L1', [first]);
+  const key = `expanded_topic_words_${packs[0].id}_L1`;
+  const saved = JSON.parse(values.get(key));
+  vocab.appendTopicWords(packs[1].id, 'L1', [{ ...first, word: 'test fork' }]);
+  vocab.appendTopicWords(packs[0].id, 'L2', [{ ...first, level: 'L2' }]);
+  vocab.appendTopicWords(packs[0].id, 'L1', [{ ...first, word: 'test plate' }]);
+  const reloaded = await loadTs(new URL('../src/lib/vocab-storage.ts', import.meta.url));
+  const restored = reloaded.getTopicPacks('L1')[0].words;
+  assert.equal(restored.length, packs[0].words.length + 2);
+  assert.deepEqual(restored.find(w => w.id === saved[0].id), saved[0]);
+  assert.equal(reloaded.getTopicPacks('L2')[0].words.filter(w => w.word === first.word).length, 1);
+  assert.equal(reloaded.getTopicPacks('L1')[1].words.at(-1).word, 'test fork');
+  values.set(key, '{broken');
+  assert.equal(reloaded.getTopicPacks('L1')[1].words.at(-1).word, 'test fork');
+  assert.equal(reloaded.getTopicPacks('L2')[0].words.at(-1).word, first.word);
+});
+
+test('legacy expansion migrates without changing IDs or losing mastery and details', () => {
+  const { values } = browser();
+  const legacy = { ...words[0], word: 'test spoon', id: 'topic-extra-legacy', status: 'in_bank', source: 'daily_recommend', addedAt: 123 };
+  values.set(extraKey, JSON.stringify({ 'coffee-dining': [legacy] }));
+  values.set('english-coach.vocab.topic-progress.v1', JSON.stringify({ 'coffee-dining': [legacy.id] }));
+  assert.deepEqual(vocab.getTopicPacks('L1')[0].words.at(-1), legacy);
+  assert.deepEqual(JSON.parse(values.get('expanded_topic_words_coffee-dining_L1')), [legacy]);
+  assert.ok(vocab.getTopicPackProgress()['coffee-dining'].includes(legacy.id));
+  assert.ok(values.has(extraKey));
+  assert.equal(vocab.appendTopicWords('coffee-dining', 'L1', [legacy]), 0);
+  values.delete('expanded_topic_words_coffee-dining_L1');
+  window.localStorage.setItem = () => { throw new Error('quota'); };
+  assert.equal(vocab.getTopicPacks('L1')[0].words.at(-1).id, legacy.id);
+});
+
+test('mastery can be undone, persists independently and fails visibly when storage is denied', () => {
+  const { values } = browser();
+  const pack = vocab.getTopicPacks('L1')[0];
+  const [first, second] = pack.words;
+  vocab.markTopicWordMastered(pack.id, first.id);
+  vocab.markTopicWordMastered(pack.id, second.id);
+  vocab.setTopicWordMastered(pack.id, first.id, false);
+  assert.deepEqual(vocab.getTopicPackProgress()[pack.id], [second.id]);
+  assert.equal(vocab.getBankList().length, 0);
+  const before = values.get('english-coach.vocab.topic-progress.v1');
+  window.localStorage.setItem = () => { throw new Error('quota'); };
+  assert.throws(() => vocab.setTopicWordMastered(pack.id, second.id, false), /保存失败/);
+  assert.equal(values.get('english-coach.vocab.topic-progress.v1'), before);
+  assert.deepEqual(vocab.getTopicPackProgress()[pack.id], [second.id]);
 });
 
 test('generation API uses non-stream JSON, current level, curated exclusions and server credentials', async () => {

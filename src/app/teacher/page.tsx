@@ -11,7 +11,7 @@ import { ExpressionFeedbackCard } from '@/components/expression-feedback';
 import { useLearningLevel } from '@/hooks/use-learning-level';
 import { DEFAULT_LEVEL, getUserLevel, type UserLevel } from '@/lib/level-config';
 import { resolveSessionTitle } from '@/lib/chat-title';
-import { addVocab, getVocabList, getWordReference } from '@/lib/vocab-storage';
+import { addVocab, getVocabList, getWordReference, getBankList, VOCAB_UPDATED_EVENT, type VocabItem } from '@/lib/vocab-storage';
 
 const greeting: Message = { id: 0, role: 'assistant', content: "Hi! I'm Jenny, your speaking coach. No pressure, just practice. Tell me one good thing about your day! 🌿" };
 function sentenceForWord(content: string, word: string) {
@@ -22,6 +22,15 @@ function sentenceForWord(content: string, word: string) {
 export default function TeacherPage() {
  const [messages, setMessages] = useState<Message[]>([greeting]);
  const [draft, setDraft] = useState('');
+ const [practiceWords, setPracticeWords] = useState<VocabItem[]>([]);
+ const inputRef = useRef<HTMLTextAreaElement>(null);
+ useEffect(() => {
+  const refresh = () => setPracticeWords(getBankList().filter(word => word.level === getUserLevel()).sort((a, b) => b.addedAt - a.addedAt).slice(0, 3));
+  refresh();
+  window.addEventListener(VOCAB_UPDATED_EVENT, refresh); window.addEventListener('storage', refresh); window.addEventListener('app-level-changed', refresh); window.addEventListener('focus', refresh);
+  const poll = window.setInterval(refresh, 30000);
+  return () => { window.clearInterval(poll); window.removeEventListener(VOCAB_UPDATED_EVENT, refresh); window.removeEventListener('storage', refresh); window.removeEventListener('app-level-changed', refresh); window.removeEventListener('focus', refresh); };
+ }, []);
  const [hydrated, setHydrated] = useState(false);
  const [storageWarning, setStorageWarning] = useState('');
  const [isTyping, setIsTyping] = useState(false);
@@ -142,7 +151,7 @@ export default function TeacherPage() {
   const assistantId = nextId.current++; let received = '';
   setMessages(previous => [...previous, { id: assistantId, role: 'assistant', level: turnLevel, content: '' }]);
   try {
-   const content = await requestAiReply([...messages, { role: 'user', content: text }].map(message => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: message.content })), undefined, delta => { if (controller.signal.aborted) return; received += delta; setMessages(previous => previous.map(message => message.id === assistantId ? { ...message, content: received } : message)); }, controller.signal, feedback => { if (controller.signal.aborted) return; setMessages(previous => previous.map(message => message.id === userId ? { ...message, feedback, feedbackState: feedback ? undefined : 'unavailable' as const } : message).map(message => message.id === assistantId && feedback?.translation ? { ...message, translation: feedback.translation } : message)); }, level);
+   const content = await requestAiReply([...messages, { role: 'user', content: text }].map(message => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: message.content })), undefined, delta => { if (controller.signal.aborted) return; received += delta; setMessages(previous => previous.map(message => message.id === assistantId ? { ...message, content: received } : message)); }, controller.signal, feedback => { if (controller.signal.aborted) return; setMessages(previous => previous.map(message => message.id === userId ? { ...message, feedback, feedbackState: feedback ? undefined : 'unavailable' as const } : message).map(message => message.id === assistantId && feedback?.translation ? { ...message, translation: feedback.translation } : message)); }, turnLevel, getBankList().filter(word => word.level === turnLevel).sort((a, b) => b.addedAt - a.addedAt).slice(0, 3).map(word => word.word));
    if (controller.signal.aborted) return;
    setMessages(previous => previous.map(message => message.id === assistantId ? { ...message, content } : message));
    chatSpeech.autoSpeak({ id: assistantId, content });
@@ -200,9 +209,9 @@ export default function TeacherPage() {
    {isTyping && !messages[messages.length - 1]?.content && <div className={styles.typing} role="status">✳ 老师正在组织回复<span>•••</span></div>}
    </div>
   </div>
-  <div className={styles.composer}><form onSubmit={send} className={styles.inputBar}>
+  <div className={styles.composer}>{practiceWords.length > 0 && <button type="button" className={styles.practiceTip} onClick={() => { setDraft(current => `${current.trimEnd()}${current.trim() ? ' ' : ''}${practiceWords[0].word} `); inputRef.current?.focus(); }} aria-label={`练习生词 ${practiceWords[0].word}，点击插入输入框`}>💡 试着在对话中用用这个词：<b>{practiceWords[0].word}</b><span>[{practiceWords[0].translation}]</span></button>}<form onSubmit={send} className={styles.inputBar}>
    <button type="button" className={`${styles.mic} ${speechInput.listening ? styles.micListening : ''}`} aria-label={speechInput.listening ? '停止语音输入' : '开始语音输入'} onClick={() => { chatSpeech.prepare(); speechInput.toggle(); }}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
-   <label className={styles.srOnly} htmlFor="chat-message">输入英文消息</label><textarea id="chat-message" rows={2} maxLength={2000} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={handleKeyDown} placeholder="用英语聊聊你的一天…" />
+   <label className={styles.srOnly} htmlFor="chat-message">输入英文消息</label><textarea ref={inputRef} id="chat-message" rows={2} maxLength={2000} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={handleKeyDown} placeholder="用英语聊聊你的一天…" />
    <button type="submit" className={styles.send} disabled={!hydrated || !draft.trim() || isTyping} aria-label="发送消息">↑</button>
   </form><div className={styles.srOnly} role="status">{storageWarning || notice}</div></div>
   </div>{selectedWord && <div className={styles.wordPopover} role="dialog" style={{ left: wordPopoverPosition.x, top: wordPopoverPosition.y, bottom: 'auto' }}><div className={styles.popoverWord}><strong>{selectedWord}</strong><small>{getWordReference(selectedWord, level).phonetic || '音标待补充'}</small><span>{getWordReference(selectedWord, level).translation}</span></div><button type="button" onClick={() => void chatSpeech.speak({ id: -1, content: selectedWord })} aria-label={`朗读 ${selectedWord}`}>🔊</button><button type="button" onClick={saveChatWord}>＋ 收入词库</button><button type="button" onClick={() => setSelectedWord(null)} aria-label="关闭">×</button></div>}</div>;

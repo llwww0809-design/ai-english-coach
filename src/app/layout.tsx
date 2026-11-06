@@ -6,7 +6,8 @@ export const metadata: Metadata = {
   description: '每天一点，更自信地说英语',
   applicationName: 'AI English Coach',
   appleWebApp: { capable: true, title: 'AI Coach', statusBarStyle: 'default' },
-  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  manifest: '/manifest.json',
+  icons: { icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/icon-192.png', sizes: '192x192', type: 'image/png' }], apple: '/apple-touch-icon.png' },
 };
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, maximumScale: 1, userScalable: false, viewportFit: 'cover', themeColor: '#f5f6f1' };
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, maximumScale: 1, userScalable: false, viewportFit: 'cover', themeColor: '#f9f9f9' };
 export default function RootLayout({children}: Readonly<{children: React.ReactNode}>) { return <html lang="zh-CN" data-scroll-behavior="smooth"><body>{children}<GlobalNav /></body></html>; }

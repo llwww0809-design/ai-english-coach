@@ -1,6 +1,7 @@
 import { getUserLevel, learningLevels, normalizeLearningLevel, type LearningLevel } from './level-config';
 import { validateTopicWord, wordKey, type GeneratedTopicWord } from './topic-generation';
 import { topicDefinitions } from './topic-vocab';
+import { dailyWordSupplements } from './daily-vocab';
 
 export interface VocabItem {
   id: string; word: string; phonetic: string; translation: string;
@@ -10,12 +11,14 @@ export interface VocabItem {
 }
 export type VocabInput = Omit<VocabItem, 'id' | 'addedAt'> & Partial<Pick<VocabItem, 'id' | 'addedAt'>>;
 export interface DailyProgress { date: string; level: LearningLevel; passed: string[]; added: string[]; }
-export interface DailyRecommendState { date: string; level: LearningLevel; wordIds: string[]; currentIndex: number; handled: Record<string, 'passed' | 'added'>; }
+export interface DailyRecommendState { date: string; level: LearningLevel; wordIds: string[]; currentIndex: number; handled: Record<string, 'passed' | 'added'>; exhausted?: boolean; }
 export interface TopicPack { id: string; title: string; subtitle: string; category: 'travel' | 'work' | 'exam' | 'daily'; words: VocabItem[]; }
 const STORAGE_KEY = 'english-coach.vocab.v1';
 const DAILY_KEY = 'english-coach.vocab.daily.v1';
 const DAILY_RECOMMEND_KEY = 'english-coach.vocab.daily-recommend.v1';
-const TOPIC_EXTRA_KEY = 'english-coach.vocab.topic-extra.v1';
+const SEEN_VOCAB_KEY = 'seen_vocab_ids';
+const LEGACY_TOPIC_EXTRA_KEY = 'english-coach.vocab.topic-extra.v1';
+const expandedTopicKey = (topicId: string, level: LearningLevel) => `expanded_topic_words_${topicId}_${level}`;
 const TOPIC_PROGRESS_KEY = 'english-coach.vocab.topic-progress.v1';
 export const VOCAB_UPDATED_EVENT = 'english-coach:vocab-updated';
 const isBrowser = () => typeof window !== 'undefined';
@@ -125,6 +128,15 @@ const dailyOrder: Record<LearningLevel, string[]> = {
 };
 const allRows = [...Object.values(data).flat(), ...Object.values(dailyExtras)];
 const dailyData = Object.fromEntries(levels.map(level => [level, dailyOrder[level].map(word => allRows.find(row => row[0] === word)!)])) as Record<LearningLevel, WordData[]>;
+// IDs identify the vocabulary itself, never its date, random position or source scene.
+const dailyWordId = (level: LearningLevel, word: string) => `daily-${level}-${encodeURIComponent(wordKey(word))}`;
+export function getDailyWordPool(level: LearningLevel = getUserLevel()): VocabItem[] {
+  const rows = [...dailyData[level], ...data[level].filter(row => !row[0].includes(' ')),
+    ...topicDefinitions.flatMap(topic => topic.byLevel[level]).filter(row => !row[0].includes(' ')),
+    ...(dailyWordSupplements[level] || [])];
+  return [...new Map(rows.map(row => [wordKey(row[0]), row])).values()]
+    .map(row => makeWord(row, level, dailyWordId(level, row[0])));
+}
 function normalize(raw: Partial<VocabItem>, index: number): VocabItem {
   return { id: raw.id || `seed-${index + 1}`, word: raw.word || '', phonetic: raw.phonetic || '', translation: raw.translation || '', collocations: Array.isArray(raw.collocations) ? raw.collocations : [], exampleEn: raw.exampleEn || raw.word || '', exampleZh: raw.exampleZh || '', level: normalizeLevel(raw.level), status: raw.status === 'mastered' ? 'mastered' : 'in_bank', addedAt: raw.addedAt || raw.createdAt || Date.now(), source: raw.source === 'chat_pick' || raw.source === 'manual' ? raw.source : 'daily_recommend', reviewCount: raw.reviewCount || 0 };
 }
@@ -138,28 +150,46 @@ export function getVocabList() { return read(); }
 export function getBankList() { return read().filter(item => item.status === 'in_bank'); }
 // Extra words live separately from the curated pool so existing positional IDs remain stable.
 function getExpandedPacks(): TopicPack[] {
-  let saved: Record<string, unknown> = {};
+  let legacy: Record<string, unknown> = {};
   if (isBrowser()) {
     try {
-      const value: unknown = JSON.parse(window.localStorage.getItem(TOPIC_EXTRA_KEY) || '{}');
-      if (value && typeof value === 'object' && !Array.isArray(value)) saved = value as Record<string, unknown>;
+      const value: unknown = JSON.parse(window.localStorage.getItem(LEGACY_TOPIC_EXTRA_KEY) || '{}');
+      if (value && typeof value === 'object' && !Array.isArray(value)) legacy = value as Record<string, unknown>;
     } catch { /* Keep curated vocabulary available even if local storage is damaged. */ }
   }
   return topicPacks.map(pack => {
-    const extras = Array.isArray(saved[pack.id]) ? saved[pack.id] as unknown[] : [];
     const seen = new Set(pack.words.map(word => word.level + ':' + wordKey(word.word)));
     const ids = new Set(pack.words.map(word => word.id));
     const words = [...pack.words];
-    for (const value of extras) {
-      if (!value || typeof value !== 'object') continue;
-      const item = value as VocabItem;
-      if (!levels.includes(item.level)) continue;
-      const valid = validateTopicWord(item, item.level);
-      if (!valid || typeof item.id !== 'string' || !item.id.startsWith('topic-extra-') || ids.has(item.id)) continue;
-      const key = item.level + ':' + wordKey(valid.word);
-      if (seen.has(key)) continue;
-      seen.add(key); ids.add(item.id);
-      words.push({ ...valid, id: item.id, status: 'in_bank', source: 'daily_recommend', addedAt: Number(item.addedAt) || 0 });
+    for (const level of levels) {
+      let saved: unknown[] = [];
+      if (isBrowser()) {
+        try {
+          const value: unknown = JSON.parse(window.localStorage.getItem(expandedTopicKey(pack.id, level)) || '[]');
+          if (Array.isArray(value)) saved = value;
+        } catch { /* A damaged scene must not hide other scenes or levels. */ }
+      }
+      const previous = Array.isArray(legacy[pack.id]) ? legacy[pack.id] as unknown[] : [];
+      const extras: VocabItem[] = [];
+      let migrated = false;
+      for (const [index, value] of [...saved, ...previous].entries()) {
+        if (!value || typeof value !== 'object') continue;
+        const item = value as VocabItem;
+        const valid = validateTopicWord(item, level);
+        if (!valid || typeof item.id !== 'string' || !item.id.startsWith('topic-extra-') || ids.has(item.id)) continue;
+        const key = level + ':' + wordKey(valid.word);
+        if (seen.has(key)) continue;
+        seen.add(key); ids.add(item.id);
+        extras.push({ ...valid, id: item.id, status: 'in_bank', source: 'daily_recommend', addedAt: Number(item.addedAt) || 0 });
+        if (index >= saved.length) migrated = true;
+      }
+      // Keep old IDs so already-mastered dynamic words retain their progress.
+      // Retain the legacy key as a backup; migration never deletes user data.
+      if (migrated && isBrowser()) {
+        try { window.localStorage.setItem(expandedTopicKey(pack.id, level), JSON.stringify(extras)); }
+        catch { /* Read legacy data even when migration cannot be written. */ }
+      }
+      words.push(...extras);
     }
     return { ...pack, words };
   });
@@ -182,9 +212,8 @@ export function appendTopicWords(packId: string, level: LearningLevel, input: Ge
     additions.push({ ...item, id: 'topic-extra-' + (globalThis.crypto?.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2)), status: 'in_bank', source: 'daily_recommend', addedAt: Date.now() });
   }
   if (!additions.length) return 0;
-  const next = Object.fromEntries(packs.map(item => [item.id,
-    [...item.words.filter(word => word.id.startsWith('topic-extra-')), ...(item.id === packId ? additions : [])]]));
-  try { window.localStorage.setItem(TOPIC_EXTRA_KEY, JSON.stringify(next)); }
+  const next = [...pack.words.filter(word => word.level === level && word.id.startsWith('topic-extra-')), ...additions];
+  try { window.localStorage.setItem(expandedTopicKey(packId, level), JSON.stringify(next)); }
   catch { throw new Error('本地存储空间不足或不可用，新词未保存，请检查浏览器存储设置。'); }
   window.dispatchEvent(new Event(VOCAB_UPDATED_EVENT));
   return additions.length;
@@ -197,14 +226,18 @@ export function getTopicPackProgress(): Record<string, string[]> {
     return Object.fromEntries(getExpandedPacks().map(pack => { const ids = (saved as Record<string, unknown>)[pack.id]; return [pack.id, Array.isArray(ids) ? [...new Set(ids.filter((id): id is string => typeof id === 'string' && pack.words.some(word => word.id === id)))] : []]; }));
   } catch { return {}; }
 }
-export function markTopicWordMastered(packId: string, wordId: string) {
+export function setTopicWordMastered(packId: string, wordId: string, mastered: boolean) {
   const progress = getTopicPackProgress();
   if (!getExpandedPacks().some(pack => pack.id === packId && pack.words.some(word => word.id === wordId))) return progress;
-  progress[packId] = [...new Set([...(progress[packId] || []), wordId])];
-  if (isBrowser()) window.localStorage.setItem(TOPIC_PROGRESS_KEY, JSON.stringify(progress));
+  progress[packId] = mastered ? [...new Set([...(progress[packId] || []), wordId])] : (progress[packId] || []).filter(id => id !== wordId);
+  if (isBrowser()) {
+    try { window.localStorage.setItem(TOPIC_PROGRESS_KEY, JSON.stringify(progress)); }
+    catch { throw new Error('掌握状态保存失败，请检查浏览器本地存储设置后重试。'); }
+  }
   if (isBrowser()) window.dispatchEvent(new Event(VOCAB_UPDATED_EVENT));
   return progress;
 }
+export function markTopicWordMastered(packId: string, wordId: string) { return setTopicWordMastered(packId, wordId, true); }
 export function addToBank(input: VocabInput): VocabItem[] {
   const items = read(); const duplicate = items.find(item => item.level === input.level && item.word.trim().toLowerCase() === input.word.trim().toLowerCase());
   const next = duplicate ? items.map(item => item.id === duplicate.id ? { ...item, ...input, id: item.id, addedAt: item.addedAt, status: 'in_bank' as const } : item) : [normalize({ ...input, id: `vocab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, addedAt: Date.now() }, items.length), ...items];
@@ -216,23 +249,116 @@ export function addVocab(input: { word: string; phonetic?: string; translation?:
 export function removeFromBank(id: string) { const next = read().map(item => item.id === id ? { ...item, status: 'mastered' as const } : item); write(next); return next; }
 export function toggleMastered(id: string) { const next = read().map(item => item.id === id ? { ...item, status: item.status === 'mastered' ? 'in_bank' as const : 'mastered' as const, reviewCount: (item.reviewCount || 0) + 1 } : item); write(next); return next; }
 export function deleteVocab(id: string) { const next = read().filter(item => item.id !== id); write(next); return next; }
-function buildDailyRecommendations(level: LearningLevel, date: string) { return dailyData[level].map((row, index) => makeWord(row, level, `daily-${date}-${level}-${index}`)); }
+// Memory is only a fallback when the browser denies storage; never shared during SSR.
+let dailyFallback: { owner: Window; values: Map<string, string> } | undefined;
+function dailyMemory() {
+  if (!isBrowser()) return undefined;
+  if (dailyFallback?.owner !== window) dailyFallback = { owner: window, values: new Map() };
+  return dailyFallback.values;
+}
+function readDailyValue(key: string): unknown {
+  if (!isBrowser()) return null;
+  try {
+    let text: string | null;
+    try { text = dailyMemory()?.get(key) ?? window.localStorage.getItem(key); }
+    catch { text = dailyMemory()?.get(key) || null; }
+    return JSON.parse(text || 'null');
+  } catch { return null; }
+}
+function saveDailyValue(key: string, value: unknown): boolean {
+  if (!isBrowser()) return false;
+  const text = JSON.stringify(value);
+  try { window.localStorage.setItem(key, text); dailyMemory()?.delete(key); return true; }
+  catch { dailyMemory()?.set(key, text); return false; }
+}
+function canonicalDailyId(id: unknown, level: LearningLevel): string | undefined {
+  if (typeof id !== 'string') return undefined;
+  const legacy = /^daily-\d{4}-\d{2}-\d{2}-(L[1-5])-(\d+)$/.exec(id);
+  if (!legacy) return id;
+  const word = legacy[1] === level ? dailyOrder[level][Number(legacy[2])] : undefined;
+  return word ? dailyWordId(level, word) : undefined;
+}
+export function getSeenVocabIds(): Record<LearningLevel, string[]> {
+  const saved = readDailyValue(SEEN_VOCAB_KEY);
+  const object = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved as Record<string, unknown> : {};
+  return Object.fromEntries(levels.map(level => {
+    const valid = new Set(getDailyWordPool(level).map(word => word.id));
+    const ids = Array.isArray(object[level]) ? object[level] as unknown[] : [];
+    return [level, [...new Set(ids.map(id => canonicalDailyId(id, level)).filter((id): id is string => Boolean(id && valid.has(id))))]];
+  })) as Record<LearningLevel, string[]>;
+}
+function readDailyState(level: LearningLevel): DailyRecommendState | null {
+  const raw = readDailyValue(DAILY_RECOMMEND_KEY + '.' + level) || readDailyValue(DAILY_RECOMMEND_KEY);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const saved = raw as Partial<DailyRecommendState>;
+  if (saved.level !== level || typeof saved.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(saved.date) || !Array.isArray(saved.wordIds)) return null;
+  const valid = new Set(getDailyWordPool(level).map(word => word.id));
+  const ids = saved.wordIds.map(id => canonicalDailyId(id, level));
+  if (ids.some(id => !id || !valid.has(id)) || new Set(ids).size !== ids.length) return null;
+  const wordIds = ids as string[];
+  if (wordIds.length !== 10 && !(wordIds.length === 0 && saved.exhausted === true)) return null;
+  const handled: DailyRecommendState['handled'] = {};
+  if (saved.handled && typeof saved.handled === 'object' && !Array.isArray(saved.handled)) {
+    for (const [id, status] of Object.entries(saved.handled)) {
+      const canonical = canonicalDailyId(id, level);
+      if (canonical && wordIds.includes(canonical) && (status === 'passed' || status === 'added')) handled[canonical] = status;
+    }
+  }
+  const firstPending = wordIds.findIndex(id => !handled[id]);
+  return { date: saved.date, level, wordIds, handled, currentIndex: firstPending < 0 ? wordIds.length : firstPending, exhausted: wordIds.length === 0 };
+}
 export function getDailyRecommendState(level: LearningLevel = getUserLevel()): DailyRecommendState {
   const date = today();
-  if (isBrowser()) { try { const saved = JSON.parse(window.localStorage.getItem(DAILY_RECOMMEND_KEY + '.' + level) || window.localStorage.getItem(DAILY_RECOMMEND_KEY) || 'null') as Partial<DailyRecommendState> | null; if (saved?.date === date && saved.level === level && Array.isArray(saved.wordIds) && saved.wordIds.length === 10) return { date, level, wordIds: saved.wordIds, currentIndex: Math.min(Math.max(Number(saved.currentIndex) || 0, 0), 10), handled: saved.handled && typeof saved.handled === 'object' ? saved.handled : {} }; } catch { /* Restore with a fresh daily batch. */ } }
-  const fresh: DailyRecommendState = { date, level, wordIds: buildDailyRecommendations(level, date).map(item => item.id), currentIndex: 0, handled: {} };
-  if (isBrowser()) window.localStorage.setItem(DAILY_RECOMMEND_KEY + '.' + level, JSON.stringify(fresh)); return fresh;
+  const saved = readDailyState(level);
+  const history = getSeenVocabIds();
+  // Migrate both current and prior-day handled entries before selecting anything new.
+  if (saved) {
+    const merged = [...new Set([...history[level], ...Object.keys(saved.handled)])];
+    if (merged.length !== history[level].length) {
+      history[level] = merged;
+      saveDailyValue(SEEN_VOCAB_KEY, history);
+    }
+    if (saved.date === date) {
+      saveDailyValue(DAILY_RECOMMEND_KEY + '.' + level, saved);
+      return saved;
+    }
+  }
+  const seen = new Set(history[level]);
+  const remaining = getDailyWordPool(level).filter(word => !seen.has(word.id));
+  // Fisher-Yates gives an unbiased sample; a batch is frozen until the date changes.
+  for (let index = remaining.length - 1; index > 0; index--) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [remaining[index], remaining[other]] = [remaining[other], remaining[index]];
+  }
+  const exhausted = remaining.length < 10;
+  const fresh: DailyRecommendState = { date, level, wordIds: exhausted ? [] : remaining.slice(0, 10).map(word => word.id), currentIndex: 0, handled: {}, exhausted };
+  saveDailyValue(DAILY_RECOMMEND_KEY + '.' + level, fresh);
+  return fresh;
 }
-export function getDailyRecommendations(level: LearningLevel = getUserLevel()) { const state = getDailyRecommendState(level); const byId = new Map(buildDailyRecommendations(level, state.date).map(item => [item.id, item])); return state.wordIds.map(id => byId.get(id)).filter((item): item is VocabItem => Boolean(item)); }
+export function getDailyRecommendations(level: LearningLevel = getUserLevel()) {
+  const state = getDailyRecommendState(level);
+  const byId = new Map(getDailyWordPool(level).map(item => [item.id, item]));
+  return state.wordIds.map(id => byId.get(id)).filter((item): item is VocabItem => Boolean(item));
+}
 export function markDailyHandled(id: string, status: 'passed' | 'added', level: LearningLevel) {
-  const state = getDailyRecommendState(level); const handled = { ...state.handled, [id]: status }; const index = state.wordIds.findIndex(wordId => !handled[wordId]); const next = { ...state, handled, currentIndex: index < 0 ? 10 : index };
-  if (isBrowser()) window.localStorage.setItem(DAILY_RECOMMEND_KEY + '.' + level, JSON.stringify(next)); return next;
+  const state = getDailyRecommendState(level);
+  if (!state.wordIds.includes(id) || state.handled[id] || (status !== 'passed' && status !== 'added')) return state;
+  const handled = { ...state.handled, [id]: status };
+  const index = state.wordIds.findIndex(wordId => !handled[wordId]);
+  const next = { ...state, handled, currentIndex: index < 0 ? state.wordIds.length : index };
+  const history = getSeenVocabIds();
+  history[level] = [...new Set([...history[level], id])];
+  const historySaved = saveDailyValue(SEEN_VOCAB_KEY, history);
+  const progressSaved = saveDailyValue(DAILY_RECOMMEND_KEY + '.' + level, next);
+  if (!historySaved || !progressSaved) throw new Error('浏览器无法保存学习进度，请允许本地存储后再继续；当前进度暂留在此页面。');
+  if (isBrowser()) window.dispatchEvent(new Event(VOCAB_UPDATED_EVENT));
+  return next;
 }
 export function getWordReference(word: string, level: LearningLevel = getUserLevel()) {
   const key = word.trim().toLowerCase();
   const topicWord = getTopicPacks(level).flatMap(pack => pack.words).find(item => item.word.toLowerCase() === key);
   if (topicWord) return { phonetic: topicWord.phonetic, translation: topicWord.translation, collocations: topicWord.collocations, exampleEn: topicWord.exampleEn, exampleZh: topicWord.exampleZh };
-  const row = [...dailyData[level], ...data[level]].find(item => item[0].toLowerCase() === key);
+  const row = [...dailyData[level], ...data[level], ...(dailyWordSupplements[level] || [])].find(item => item[0].toLowerCase() === key);
   return row ? { phonetic: row[1], translation: row[2], collocations: row[3], exampleEn: row[4], exampleZh: row[5] } : { phonetic: '', translation: '结合原对话语境理解', collocations: [], exampleEn: '', exampleZh: '' };
 }
 
