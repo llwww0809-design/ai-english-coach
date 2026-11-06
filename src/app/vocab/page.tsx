@@ -1,5 +1,5 @@
 'use client';
-import { canFallbackSpeech, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { startSpeechPlayback, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -231,12 +231,14 @@ export default function VocabPage() {
     speechController.current = controller;
     audioPending.current = key; setLoadingKey(key);
     setSpeaking(key); setNotice('正在准备语音…');
+    const startedAt = Date.now();
     let fallbackStarted = false;
     const fallback = () => {
       if (fallbackStarted) return;
       fallbackStarted = true;
       if (requestId !== speechRequest.current) return;
       audio.onerror = null; audio.onended = null; audio.pause();
+      setSpeaking(null); audioPending.current = null; setLoadingKey(null);
       setNotice('');
       speakBrowser(text, () => { if (requestId === speechRequest.current) { stopSpeech(); setNotice(''); } }, () => { if (requestId === speechRequest.current) { stopSpeech(); setNotice('设备语音不可用，请检查系统英语语音设置。'); } });
     };
@@ -244,16 +246,15 @@ export default function VocabPage() {
       const { blob } = await fetchSpeech(text, controller.signal, { level: getUserLevel() });
       if (requestId !== speechRequest.current) return;
       audioUrl.current = URL.createObjectURL(blob);
-      audio.src = audioUrl.current;
+      audio.src = audioUrl.current; audio.playbackRate = 0.9;
       audio.onended = () => { stopSpeech(); setNotice(''); };
-      audio.onerror = () => { if (requestId === speechRequest.current) { stopSpeech(); setNotice('音频播放失败，请再点一次朗读。'); } };
-      await audio.play();
+      audio.onerror = fallback;
+      await startSpeechPlayback(audio, controller.signal, startedAt);
       if (requestId !== speechRequest.current) return;
       setNotice('');
     } catch (error) {
       if (requestId !== speechRequest.current) return;
-      if (canFallbackSpeech(error)) fallback();
-      else { stopSpeech(); setNotice('请再次点击朗读，允许浏览器播放音频。'); }
+      fallback();
     } finally { if (requestId === speechRequest.current) { audioPending.current = null; setLoadingKey(null); speechController.current = null; } }
   }, [speaking, stopSpeech]);
 

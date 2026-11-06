@@ -56,7 +56,7 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     await hook.toggle(); hook = render();
     assert.equal(hook.state, 'playing');
     assert.equal(requests[0].text, 'One. Two. Three.');
-    assert.equal(requests[0].voice, 'nova');
+    assert.equal(requests[0].voice, 'Sarah');
     assert.equal(requests[0].speed, 0.8);
     assert.ok(media.src.startsWith('blob:'), 'Plain MP3 without timing metadata is playable');
     assert.deepEqual(requests[0].sentences, ['One.', 'Two.', 'Three.']);
@@ -108,11 +108,11 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     assert.equal(requests.length, beforeRetry + 1, 'A new tap retries TTS after service fallback');
     assert.equal(hook.state, 'playing'); assert.equal(spoken.length, beforeSpeech);
     hook.pause(); rejectPlay = true; await hook.toggle(); hook = render();
-    assert.equal(spoken.length, beforeSpeech, 'Blocked Audio.play must not switch to native speech');
-    assert.equal(hook.state, 'paused'); assert.ok(hook.error);
+    assert.equal(spoken.length, beforeSpeech+1, 'Blocked Audio.play falls back immediately');
+    assert.equal(hook.state, 'paused');
     const timer = globalThis.setTimeout;
     try {
-      globalThis.setTimeout=(fn,ms,...args)=>timer(fn,ms===8000 ? 1 : ms,...args);
+      globalThis.setTimeout=(fn,ms,...args)=>timer(fn,ms===5000 ? 1 : ms,...args);
       hangFetch=true; hook.preview('timeout fallback'); await tick(); hook=render();
       assert.equal(spoken.at(-1).text,'timeout fallback');
       assert.notEqual(hook.state,'loading','Timeout releases the loading button');

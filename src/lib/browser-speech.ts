@@ -38,9 +38,9 @@ export async function fetchSpeech(text: string, signal: AbortSignal, options: Re
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
-      reject(new SpeechServiceError('TTS request timeout after 8000ms', true));
+      reject(new SpeechServiceError('TTS request timeout after 5000ms', true));
       controller.abort();
-    }, 8000);
+    }, 5000);
   });
   try {
     return await Promise.race([(async () => {
@@ -56,4 +56,26 @@ export async function fetchSpeech(text: string, signal: AbortSignal, options: Re
     }
     throw error;
   } finally { clearTimeout(timeout); signal.removeEventListener('abort', abort); }
+}
+
+/** Bound MP3 startup by the same five-second budget as the preceding fetch. */
+export async function startSpeechPlayback(audio: HTMLAudioElement, signal: AbortSignal, startedAt = Date.now()) {
+  if (signal.aborted) { audio.pause(); throw new DOMException('Playback cancelled', 'AbortError'); }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cancel: () => void = () => {};
+  const deadline = new Promise<never>((_, reject) => {
+    cancel = () => reject(new DOMException('Playback cancelled', 'AbortError'));
+    signal.addEventListener('abort', cancel, { once: true });
+    if (signal.aborted) cancel();
+    timer = setTimeout(() => reject(new SpeechServiceError('Audio startup exceeded 5000ms', true)), Math.max(0, 5000 - (Date.now() - startedAt)));
+  });
+  try {
+    await Promise.race([audio.play(), deadline]);
+    if (signal.aborted) throw new DOMException('Playback cancelled', 'AbortError');
+  } catch (error) {
+    audio.pause();
+    throw error;
+  } finally {
+    clearTimeout(timer); signal.removeEventListener('abort', cancel);
+  }
 }

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { speechText } from '@/lib/speech-text';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
-import { canFallbackSpeech, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { startSpeechPlayback, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import { defaultVoice } from '@/lib/tts-voices';
 import { getUserLevel } from '@/lib/level-config';
 import { useUserLevel } from './use-user-level';
@@ -70,12 +70,14 @@ export function useChatSpeech(onNotice: (text: string) => void) {
     const controller = new AbortController(); request.current = controller;
     playing.current = message.id; setSpeakingId(message.id);
     noticeRef.current('正在生成自然语音…点击小喇叭可取消');
+    const startedAt = Date.now();
     let fallbackStarted = false;
     const fallback = () => {
       if (fallbackStarted) return;
       fallbackStarted = true;
       if (controller.signal.aborted || generation !== token.current) return;
       const player = getChatAudio(); player.onerror = null; player.onended = null; player.pause();
+      playing.current = null; setSpeakingId(null);
       noticeRef.current('正在使用设备语音朗读');
       speakBrowser(text, () => { if (generation === token.current) { stop(); noticeRef.current(''); } }, () => { if (generation === token.current) { stop(); noticeRef.current('设备语音不可用，请检查系统英语语音设置后再点朗读。'); } });
     };
@@ -83,15 +85,14 @@ export function useChatSpeech(onNotice: (text: string) => void) {
       const { blob } = await fetchSpeech(text, controller.signal, { voice: defaultVoice, level: getUserLevel() });
       if (controller.signal.aborted || generation !== token.current) return;
       const player = getChatAudio();
-      objectUrl.current = URL.createObjectURL(blob); player.src = objectUrl.current;
+      objectUrl.current = URL.createObjectURL(blob); player.src = objectUrl.current; player.playbackRate = 0.9;
       player.onended = () => { if (token.current !== generation) return; stop(); noticeRef.current('朗读完成。'); };
-      player.onerror = () => { if (generation === token.current) { stop(); noticeRef.current('音频播放失败，请再点一次朗读。'); } };
-      await player.play();
+      player.onerror = fallback;
+      await startSpeechPlayback(player, controller.signal, startedAt);
       if (generation === token.current) noticeRef.current('正在朗读 · 点击小喇叭可停止');
     } catch (error) {
       if (controller.signal.aborted || generation !== token.current) return;
-      if (canFallbackSpeech(error)) fallback();
-      else { stop(); noticeRef.current('请再次点击朗读，允许浏览器播放音频。'); }
+      fallback();
     } finally { if (request.current === controller) request.current = null; }
   }, [stop]);
 

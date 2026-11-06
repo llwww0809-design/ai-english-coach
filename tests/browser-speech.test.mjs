@@ -40,7 +40,7 @@ test('shared fetch rejects invalid audio and enforces timeout without cancelling
       await assert.rejects(fetchSpeech('Hello',caller.signal),error=>canFallbackSpeech(error)===true);
     }
     assert.equal(canFallbackSpeech(new Error('NotAllowedError')),false);
-    globalThis.setTimeout=(fn,ms)=>{ assert.equal(ms,8000); return originalTimer(fn,1); };
+    globalThis.setTimeout=(fn,ms)=>{ assert.equal(ms,5000); return originalTimer(fn,1); };
     globalThis.fetch=(_url,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('timeout')),{once:true}));
     await assert.rejects(fetchSpeech('Hello',caller.signal),/timeout/);
     assert.equal(caller.signal.aborted,false,'timeout remains distinct from user stop');
@@ -50,4 +50,18 @@ test('shared fetch rejects invalid audio and enforces timeout without cancelling
     globalThis.fetch=()=>new Promise(()=>{});
     await assert.rejects(fetchSpeech('Hello',caller.signal),/timeout/);
   } finally {globalThis.fetch=originalFetch;globalThis.setTimeout=originalTimer;}
+});
+
+test('MP3 startup deadline releases a stalled play promise and respects cancellation', async()=>{
+  const {startSpeechPlayback}=await import(url(compile('../src/lib/browser-speech.ts')));
+  const timer=globalThis.setTimeout;let paused=0;
+  const audio={play:()=>new Promise(()=>{}),pause(){paused++;}};
+  try {
+    globalThis.setTimeout=(fn,ms)=>{assert.ok(ms<=5000);return timer(fn,1);};
+    await assert.rejects(startSpeechPlayback(audio,new AbortController().signal),/5000ms/);
+    assert.equal(paused,1);
+    const controller=new AbortController();controller.abort();
+    await assert.rejects(startSpeechPlayback(audio,controller.signal),{name:'AbortError'});
+    assert.equal(paused,2);
+  }finally{globalThis.setTimeout=timer;}
 });

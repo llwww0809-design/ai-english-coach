@@ -1,5 +1,3 @@
-import OpenAI from 'openai';
-
 export const runtime = 'nodejs';
 
 async function synthesize(request: Request, input: unknown) {
@@ -12,8 +10,11 @@ async function synthesize(request: Request, input: unknown) {
   if (typeof speed !== 'number' || !Number.isFinite(speed) || speed < 0.25 || speed > 4) {
     return Response.json({ error: '语速须为 0.25–4.0 之间的数字。' }, { status: 400 });
   }
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return Response.json({ error: '语音服务尚未配置，请设置 OPENAI_API_KEY。' }, { status: 503 });
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    console.error('[TTS API] ElevenLabs configuration error', new Error('ELEVENLABS_API_KEY is not configured'));
+    return Response.json({ error: '语音服务尚未配置，请设置 ELEVENLABS_API_KEY。' }, { status: 500 });
+  }
 
   const controller = new AbortController();
   const cancel = () => controller.abort(request.signal.reason);
@@ -22,20 +23,26 @@ async function synthesize(request: Request, input: unknown) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      const error = new Error('OpenAI TTS exceeded the 8000ms deadline');
+      const error = new Error('ElevenLabs TTS exceeded the 8000ms deadline');
       reject(error); controller.abort(error);
     }, 8000);
   });
   const startedAt = Date.now();
   try {
-    const client = new OpenAI({ apiKey, ...(process.env.OPENAI_BASE_URL?.trim() ? { baseURL: process.env.OPENAI_BASE_URL.trim() } : {}), timeout: 8000, maxRetries: 0 });
-    console.log('[TTS Upstream Start]:', { host: new URL(client.baseURL).host, model: 'tts-1', timeoutMs: 8000 });
-    // Always use an official OpenAI voice, including for legacy Jenny callers.
+    console.log('[TTS Upstream Start]:', { provider: 'ElevenLabs', voice: 'Sarah', timeoutMs: 8000 });
     const bytes = await Promise.race([(async () => {
-      const speech = await client.audio.speech.create({
-        model: 'tts-1', voice: 'nova', input: text.trim(), speed, response_format: 'mp3',
-      }, { signal: controller.signal });
-      console.log('[TTS Upstream Response]:', { elapsedMs: Date.now() - startedAt });
+      const speech = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL', {
+        method: 'POST',
+        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+        body: JSON.stringify({
+          text: text.trim(), model_id: 'eleven_turbo_v2_5',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+        signal: controller.signal,
+      });
+      console.log('[TTS Upstream Response]:', { status: speech.status, elapsedMs: Date.now() - startedAt });
+      if (!speech.ok) throw new Error('ElevenLabs HTTP ' + speech.status + ': ' + await speech.text());
+      if (!speech.headers.get('content-type')?.includes('audio/mpeg')) throw new Error('ElevenLabs returned invalid audio content type');
       return speech.arrayBuffer();
     })(), deadline]);
     if (!bytes.byteLength) throw new Error('Empty speech response');
@@ -51,7 +58,7 @@ async function synthesize(request: Request, input: unknown) {
       },
     });
   } catch (error) {
-    console.error('[TTS API] OpenAI speech synthesis failed', error);
+    console.error('[TTS API] ElevenLabs speech synthesis failed', error);
     return Response.json({ error: '语音合成暂不可用，请稍后重试。' }, { status: 500 });
   } finally {
     clearTimeout(timer);

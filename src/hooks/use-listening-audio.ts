@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
-import { canFallbackSpeech, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { startSpeechPlayback, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import type { SlowArticle } from '@/lib/listening-storage';
 
 type AudioState = 'idle' | 'loading' | 'playing' | 'paused' | 'finished';
@@ -46,7 +46,7 @@ export function useListeningAudio(article: SlowArticle) {
 
   function timesFor(duration: number) {
     if (sentenceTimes.current.length === article.sentences.length) return sentenceTimes.current;
-    // OpenAI MP3 has no sentence boundaries; estimate positions by word count.
+    // ElevenLabs MP3 has no sentence boundaries; estimate positions by word count.
     const weights = article.sentences.map(sentence => Math.max(1, sentence.en.split(/\s+/).length));
     const total = weights.reduce((sum, count) => sum + count, 0);
     let elapsed = 0;
@@ -67,8 +67,7 @@ export function useListeningAudio(article: SlowArticle) {
 
   function playbackError(token: number) {
     if (token !== sequence.current) return;
-    getChatAudio().pause(); updateState('paused');
-    setError('音频播放受限或加载失败，请再次点击播放。');
+    fallback(currentIndex.current, token);
   }
 
   function fallback(at: number, token: number, previewText?: string) {
@@ -77,7 +76,7 @@ export function useListeningAudio(article: SlowArticle) {
     audio.onerror = null; audio.onended = null; audio.onplay = null; audio.onpause = null; audio.ontimeupdate = null;
     audio.pause();
     browserMode.current = true; activeTrack.current = '';
-    currentIndex.current = at; setIndex(at); updateState('playing'); setError('');
+    currentIndex.current = at; setIndex(at); updateState('paused'); setError('');
     speakBrowser(previewText || article.sentences[at].en, () => {
       if (token !== sequence.current) return;
       if (!previewText && at + 1 < article.sentences.length) fallback(at + 1, token);
@@ -102,12 +101,13 @@ export function useListeningAudio(article: SlowArticle) {
     activeTrack.current = key;
     updateState('loading'); setError('');
     const abort = new AbortController(); controller.current = abort;
+    const startedAt = Date.now();
 
     try {
       let track = cache.current.get(key);
       if (!track) {
         const sentences = article.sentences.map(sentence => sentence.en);
-        const { response, blob } = await fetchSpeech(previewText || sentences.join(' '), abort.signal, { speed: currentSpeed.current, voice: 'nova', level: article.level, ...(!previewText ? { sentences } : {}) });
+        const { response, blob } = await fetchSpeech(previewText || sentences.join(' '), abort.signal, { speed: currentSpeed.current, voice: 'Sarah', level: article.level, ...(!previewText ? { sentences } : {}) });
         if (sequence.current !== token || abort.signal.aborted) return;
         let times: number[] = [];
         try {
@@ -118,7 +118,7 @@ export function useListeningAudio(article: SlowArticle) {
       }
       if (sequence.current !== token || abort.signal.aborted) return;
       sentenceTimes.current = track.times;
-      audio.src = track.url; audio.playbackRate = 1;
+      audio.src = track.url; audio.playbackRate = currentSpeed.current;
       const seek = () => {
         if (sequence.current !== token || previewText) return;
         const duration = audio.duration;
@@ -128,16 +128,15 @@ export function useListeningAudio(article: SlowArticle) {
       if (audio.readyState >= 1) seek();
       audio.ontimeupdate = sync;
       audio.onended = () => { if (sequence.current === token) updateState(previewText ? 'paused' : 'finished'); };
-      audio.onerror = () => playbackError(token);
-      audio.onplay = () => { if (sequence.current === token) updateState('playing'); };
+      audio.onerror = () => { if (!browserMode.current) fallback(currentIndex.current, token, previewText); };
+      audio.onplay = () => { if (sequence.current === token && !browserMode.current) updateState('playing'); };
       audio.onpause = () => { if (sequence.current === token && !audio.ended && status.current === 'playing') updateState('paused'); };
-      await audio.play();
-      if (sequence.current === token) updateState('playing');
+      await startSpeechPlayback(audio, abort.signal, startedAt);
+      if (sequence.current === token && !browserMode.current) updateState('playing');
     } catch (cause) {
       if (sequence.current !== token) return;
       if (abort.signal.aborted) return;
-      if (canFallbackSpeech(cause)) fallback(currentIndex.current, token, previewText);
-      else playbackError(token);
+      if (!browserMode.current) fallback(currentIndex.current, token, previewText);
     } finally { if (controller.current === abort) controller.current = null; }
   }
 
@@ -165,9 +164,11 @@ export function useListeningAudio(article: SlowArticle) {
       audio.onended = () => { if (sequence.current === token) updateState('finished'); };
       audio.onplay = () => { if (sequence.current === token) updateState('playing'); };
       audio.onpause = () => { if (sequence.current === token && !audio.ended) updateState('paused'); };
-      audio.onerror = () => playbackError(token);
-      try { await audio.play(); if (sequence.current === token) { updateState('playing'); setError(''); } }
-      catch { playbackError(token); }
+      audio.onerror = () => { if (!browserMode.current) playbackError(token); };
+      const abort = new AbortController(); controller.current = abort;
+      try { await startSpeechPlayback(audio, abort.signal); if (sequence.current === token && !browserMode.current) { updateState('playing'); setError(''); } }
+      catch { if (!abort.signal.aborted && !browserMode.current) playbackError(token); }
+      finally { if (controller.current === abort) controller.current = null; }
     } else {
       const at = status.current === 'finished' ? 0 : currentIndex.current;
       currentIndex.current = at; setIndex(at); await start(at, true);
