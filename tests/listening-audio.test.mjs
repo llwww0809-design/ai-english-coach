@@ -12,7 +12,15 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
   const spoken = [];
   const media = {
     src: '', duration: 30, currentTime: 0, readyState: 1, playbackRate: 1, ended: false, paused: true,
-    async play() { if (rejectPlay) { rejectPlay = false; throw new Error('NotAllowedError'); } this.paused = false; this.onplay?.(); },
+    async play() {
+      if (rejectPlay) { rejectPlay = false; throw new Error('NotAllowedError'); }
+      const params = new URL(this.src, 'https://example.test').searchParams;
+      requests.push({ text: params.get('text'), speed: Number(params.get('speed')) });
+      if (hangFetch) return new Promise(()=>{});
+      if (failFetch) throw new Error('Media HTTP 500');
+      if (delayed) { delayed = false; await new Promise(resolve => { complete = resolve; }); }
+      this.paused = false; this.onplay?.();
+    },
     pause() { this.paused = true; this.onpause?.(); },
     removeAttribute() { this.src = ''; }, load() {},
   };
@@ -40,15 +48,7 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     const article = { id: 'test', titleEn: 'Coffee', level: 'L1', audioSpeed: 0.8, sentences: [{ en: 'One.' }, { en: 'Two.' }, { en: 'Three.' }] };
     const render = () => { cursor = 0; return useListeningAudio(article); };
     const tick = () => new Promise(resolve => setTimeout(resolve, 5));
-    install('fetch', async (_url, init) => {
-      assert.equal(_url, '/api/tts'); assert.equal(init.method, 'POST');
-      requests.push(JSON.parse(init.body));
-      if (hangFetch) return new Promise(()=>{});
-      if (failFetch) return new Response('{}', {status:500});
-      const response = () => new Response(new Blob(['audio']), { headers: { 'Content-Type': 'audio/mpeg' } });
-      if (delayed) { delayed = false; return new Promise(resolve => { complete = () => resolve(response()); }); }
-      return response();
-    });
+    install('fetch', () => { throw new Error('Playback must use media src, not asynchronous fetch/blob'); });
     let hook = render();
     assert.equal(requests.length, 0);
     assert.equal(session.metadata.title, 'Coffee');
@@ -56,10 +56,8 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     await hook.toggle(); hook = render();
     assert.equal(hook.state, 'playing');
     assert.equal(requests[0].text, 'One. Two. Three.');
-    assert.equal(requests[0].voice, 'Sarah');
     assert.equal(requests[0].speed, 0.8);
-    assert.ok(media.src.startsWith('blob:'), 'Plain MP3 without timing metadata is playable');
-    assert.deepEqual(requests[0].sentences, ['One.', 'Two.', 'Three.']);
+    assert.ok(media.src.startsWith('/api/tts?'), 'Media source is assigned synchronously, without a Blob download');
     media.currentTime = 12; media.ontimeupdate(); hook = render();
     assert.equal(hook.index, 1);
     assert.equal(requests.length, 1, 'Sentence transition needs no background network or JS scheduling');
@@ -67,7 +65,7 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     assert.equal(hook.state, 'paused'); assert.equal(media.paused, true);
     actions.get('play')(); await tick(); hook = render();
     assert.equal(hook.state, 'playing'); assert.equal(media.currentTime, 12);
-    assert.equal(requests.length, 1, 'Resume retains the full track');
+    assert.equal(requests.length, 2, 'Resume plays the same full-track media source');
     actions.get('nexttrack')(); hook = render();
     assert.equal(hook.index, 2); assert.equal(media.currentTime, 20);
     actions.get('previoustrack')(); hook = render();

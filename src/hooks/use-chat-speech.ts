@@ -2,9 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { speechText } from '@/lib/speech-text';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
-import { startSpeechPlayback, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
-import { defaultVoice } from '@/lib/tts-voices';
-import { getUserLevel } from '@/lib/level-config';
+import { playSpeechSource, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import { useUserLevel } from './use-user-level';
 import { AUTO_TTS_EVENT, AUTO_TTS_KEY } from '@/lib/speech-preferences';
 
@@ -20,7 +18,6 @@ export function useChatSpeech(onNotice: (text: string) => void) {
   const playing = useRef<number | null>(null);
   const token = useRef(0);
   const request = useRef<AbortController | null>(null);
-  const objectUrl = useRef<string | null>(null);
 
   const stop = useCallback(() => {
     token.current++;
@@ -28,10 +25,9 @@ export function useChatSpeech(onNotice: (text: string) => void) {
     request.current?.abort(); request.current = null;
     if (typeof window !== 'undefined' && typeof Audio !== 'undefined') {
       const player = getChatAudio(); player.onended = null; player.onerror = null;
-      player.pause(); player.removeAttribute('src'); player.load();
+      player.pause();
     }
-    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
-    objectUrl.current = null; playing.current = null; setSpeakingId(null);
+    playing.current = null; setSpeakingId(null);
   }, []);
 
   useEffect(() => {
@@ -70,7 +66,6 @@ export function useChatSpeech(onNotice: (text: string) => void) {
     const controller = new AbortController(); request.current = controller;
     playing.current = message.id; setSpeakingId(message.id);
     noticeRef.current('正在生成自然语音…点击小喇叭可取消');
-    const startedAt = Date.now();
     let fallbackStarted = false;
     const fallback = () => {
       if (fallbackStarted) return;
@@ -82,14 +77,11 @@ export function useChatSpeech(onNotice: (text: string) => void) {
       speakBrowser(text, () => { if (generation === token.current) { stop(); noticeRef.current(''); } }, () => { if (generation === token.current) { stop(); noticeRef.current('设备语音不可用，请检查系统英语语音设置后再点朗读。'); } });
     };
     try {
-      const { blob } = await fetchSpeech(text, controller.signal, { voice: defaultVoice, level: getUserLevel() });
-      if (controller.signal.aborted || generation !== token.current) return;
       const player = getChatAudio();
-      objectUrl.current = URL.createObjectURL(blob); player.src = objectUrl.current; player.playbackRate = 0.9;
       player.onended = () => { if (token.current !== generation) return; stop(); noticeRef.current('朗读完成。'); };
       player.onerror = fallback;
-      await startSpeechPlayback(player, controller.signal, startedAt);
-      if (generation === token.current) noticeRef.current('正在朗读 · 点击小喇叭可停止');
+      await playSpeechSource(player, text, controller.signal);
+      if (generation === token.current && !fallbackStarted) noticeRef.current('正在朗读 · 点击小喇叭可停止');
     } catch (error) {
       if (controller.signal.aborted || generation !== token.current) return;
       fallback();

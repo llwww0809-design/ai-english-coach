@@ -24,32 +24,24 @@ test('tap primes only media synchronously; fallback is English, cancellable and 
     await Promise.resolve();
   } finally { names.forEach((name,i)=>{if(saved[i])Object.defineProperty(globalThis,name,saved[i]);else delete globalThis[name];}); }
 });
-test('shared fetch rejects invalid audio and enforces timeout without cancelling caller', async () => {
-  const originalFetch=globalThis.fetch, originalTimer=globalThis.setTimeout;
-  try {
-    const {fetchSpeech,canFallbackSpeech}=await import(url(compile('../src/lib/browser-speech.ts')));
-    const caller=new AbortController();
-    globalThis.fetch=async(path,init)=>{
-      assert.equal(path,'/api/tts'); assert.equal(init.method,'POST');
-      assert.deepEqual(JSON.parse(init.body),{speed:0.9,text:'Hello'});
-      return new Response('{}',{headers:{'Content-Type':'application/json'}});
-    };
-    await assert.rejects(fetchSpeech('Hello',caller.signal),error=>canFallbackSpeech(error) && /Invalid MP3/.test(error.message));
-    for (const status of [400,401,404,500,502,503]) {
-      globalThis.fetch=async()=>new Response('{}',{status});
-      await assert.rejects(fetchSpeech('Hello',caller.signal),error=>canFallbackSpeech(error)===true);
-    }
-    assert.equal(canFallbackSpeech(new Error('NotAllowedError')),false);
-    globalThis.setTimeout=(fn,ms)=>{ assert.equal(ms,5000); return originalTimer(fn,1); };
-    globalThis.fetch=(_url,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('timeout')),{once:true}));
-    await assert.rejects(fetchSpeech('Hello',caller.signal),/timeout/);
-    assert.equal(caller.signal.aborted,false,'timeout remains distinct from user stop');
-    // Some proxies return headers and then never finish the MP3 body.
-    globalThis.fetch=async()=>({status:200,headers:new Headers({'Content-Type':'audio/mpeg'}),blob:()=>new Promise(()=>{})});
-    await assert.rejects(fetchSpeech('Hello',caller.signal),error=>canFallbackSpeech(error) && /timeout/.test(error.message));
-    globalThis.fetch=()=>new Promise(()=>{});
-    await assert.rejects(fetchSpeech('Hello',caller.signal),/timeout/);
-  } finally {globalThis.fetch=originalFetch;globalThis.setTimeout=originalTimer;}
+test('remote media starts inside the tap stack and old cancellation cannot pause a replacement', async () => {
+  const {playSpeechSource}=await import(url(compile('../src/lib/browser-speech.ts')));
+  let tapping=true, calls=0, paused=0;
+  const audio={ src:'', play(){ assert.equal(tapping,true); calls++; return Promise.resolve(); }, pause(){paused++;} };
+  const ready=playSpeechSource(audio, 'Hello & goodbye?', new AbortController().signal, 0.8);
+  assert.equal(calls,1,'play runs before returning to the event loop');
+  const source=new URL(audio.src,'https://example.test');
+  assert.equal(source.pathname,'/api/tts'); assert.equal(source.searchParams.get('text'),'Hello & goodbye?');
+  assert.equal(source.searchParams.get('speed'),'0.8'); assert.equal(audio.playbackRate,0.8);
+  tapping=false; await ready;
+  let first=true;
+  audio.play=()=>{ if(first){first=false;return new Promise(()=>{});} return Promise.resolve(); };
+  const stop=new AbortController();
+  const old=playSpeechSource(audio,'Old',stop.signal);
+  stop.abort();
+  const next=playSpeechSource(audio,'New',new AbortController().signal);
+  await assert.rejects(old,{name:'AbortError'}); await next;
+  assert.equal(paused,0,'Cancelled startup must not pause the next playback');
 });
 
 test('MP3 startup deadline releases a stalled play promise and respects cancellation', async()=>{

@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
-import { startSpeechPlayback, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { startSpeechPlayback, playSpeechSource, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import type { SlowArticle } from '@/lib/listening-storage';
 
 type AudioState = 'idle' | 'loading' | 'playing' | 'paused' | 'finished';
-type Track = { url: string; times: number[] };
 
 /** One continuous article track avoids network requests between sentences in the background. */
 export function useListeningAudio(article: SlowArticle) {
@@ -19,7 +18,6 @@ export function useListeningAudio(article: SlowArticle) {
   const currentSpeed = useRef(article.audioSpeed);
   const sequence = useRef(0);
   const controller = useRef<AbortController | null>(null);
-  const cache = useRef(new Map<string, Track>());
   const activeTrack = useRef('');
   const ownsAudio = useRef(false);
   const browserMode = useRef(false);
@@ -41,7 +39,6 @@ export function useListeningAudio(article: SlowArticle) {
       audio.onended = null; audio.onerror = null; audio.ontimeupdate = null; audio.onloadedmetadata = null;
       audio.onplay = null; audio.onpause = null; audio.removeAttribute('src'); audio.load();
     }
-    cache.current.forEach(track => URL.revokeObjectURL(track.url)); cache.current.clear();
   }, [halt]);
 
   function timesFor(duration: number) {
@@ -101,37 +98,22 @@ export function useListeningAudio(article: SlowArticle) {
     activeTrack.current = key;
     updateState('loading'); setError('');
     const abort = new AbortController(); controller.current = abort;
-    const startedAt = Date.now();
 
     try {
-      let track = cache.current.get(key);
-      if (!track) {
-        const sentences = article.sentences.map(sentence => sentence.en);
-        const { response, blob } = await fetchSpeech(previewText || sentences.join(' '), abort.signal, { speed: currentSpeed.current, voice: 'Sarah', level: article.level, ...(!previewText ? { sentences } : {}) });
-        if (sequence.current !== token || abort.signal.aborted) return;
-        let times: number[] = [];
-        try {
-          const raw: unknown = JSON.parse(response.headers.get('X-Sentence-Times') || '[]');
-          if (Array.isArray(raw) && raw.length === sentences.length && raw.every((value, i) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && (i === 0 || value >= raw[i - 1]))) times = raw;
-        } catch { /* Keep playback available even without provider timing metadata. */ }
-        track = { url: URL.createObjectURL(blob), times }; cache.current.set(key, track);
-      }
-      if (sequence.current !== token || abort.signal.aborted) return;
-      sentenceTimes.current = track.times;
-      audio.src = track.url; audio.playbackRate = currentSpeed.current;
+      sentenceTimes.current = [];
       const seek = () => {
         if (sequence.current !== token || previewText) return;
         const duration = audio.duration;
         if (Number.isFinite(duration) && duration > 0) audio.currentTime = Math.min(timesFor(duration)[currentIndex.current] || 0, duration);
       };
       audio.onloadedmetadata = seek;
-      if (audio.readyState >= 1) seek();
       audio.ontimeupdate = sync;
       audio.onended = () => { if (sequence.current === token) updateState(previewText ? 'paused' : 'finished'); };
       audio.onerror = () => { if (!browserMode.current) fallback(currentIndex.current, token, previewText); };
       audio.onplay = () => { if (sequence.current === token && !browserMode.current) updateState('playing'); };
       audio.onpause = () => { if (sequence.current === token && !audio.ended && status.current === 'playing') updateState('paused'); };
-      await startSpeechPlayback(audio, abort.signal, startedAt);
+      await playSpeechSource(audio, previewText || article.sentences.map(sentence => sentence.en).join(' '), abort.signal, currentSpeed.current);
+      if (audio.readyState >= 1) seek();
       if (sequence.current === token && !browserMode.current) updateState('playing');
     } catch (cause) {
       if (sequence.current !== token) return;

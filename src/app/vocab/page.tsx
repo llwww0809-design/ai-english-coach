@@ -1,5 +1,5 @@
 'use client';
-import { startSpeechPlayback, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { playSpeechSource, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -231,7 +231,6 @@ export default function VocabPage() {
     speechController.current = controller;
     audioPending.current = key; setLoadingKey(key);
     setSpeaking(key); setNotice('正在准备语音…');
-    const startedAt = Date.now();
     let fallbackStarted = false;
     const fallback = () => {
       if (fallbackStarted) return;
@@ -243,13 +242,9 @@ export default function VocabPage() {
       speakBrowser(text, () => { if (requestId === speechRequest.current) { stopSpeech(); setNotice(''); } }, () => { if (requestId === speechRequest.current) { stopSpeech(); setNotice('设备语音不可用，请检查系统英语语音设置。'); } });
     };
     try {
-      const { blob } = await fetchSpeech(text, controller.signal, { level: getUserLevel() });
-      if (requestId !== speechRequest.current) return;
-      audioUrl.current = URL.createObjectURL(blob);
-      audio.src = audioUrl.current; audio.playbackRate = 0.9;
       audio.onended = () => { stopSpeech(); setNotice(''); };
       audio.onerror = fallback;
-      await startSpeechPlayback(audio, controller.signal, startedAt);
+      await playSpeechSource(audio, text, controller.signal);
       if (requestId !== speechRequest.current) return;
       setNotice('');
     } catch (error) {
