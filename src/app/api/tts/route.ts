@@ -15,7 +15,7 @@ async function synthesize(request: Request, input: unknown) {
   if (!apiKey) return Response.json({ error: '语音服务尚未配置，请设置 OPENAI_API_KEY。' }, { status: 503 });
 
   try {
-    const client = new OpenAI({ apiKey, timeout: 35000, maxRetries: 0 });
+    const client = new OpenAI({ apiKey, ...(process.env.OPENAI_BASE_URL?.trim() ? { baseURL: process.env.OPENAI_BASE_URL.trim() } : {}), timeout: 10000, maxRetries: 0 });
     // Always use an official OpenAI voice, including for legacy Jenny callers.
     const speech = await client.audio.speech.create({
       model: 'tts-1', voice: 'nova', input: text.trim(), speed, response_format: 'mp3',

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
+import { fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import type { SlowArticle } from '@/lib/listening-storage';
 
 type AudioState = 'idle' | 'loading' | 'playing' | 'paused' | 'finished';
@@ -21,10 +22,12 @@ export function useListeningAudio(article: SlowArticle) {
   const cache = useRef(new Map<string, Track>());
   const activeTrack = useRef('');
   const ownsAudio = useRef(false);
+  const browserMode = useRef(false);
   const sentenceTimes = useRef<number[]>([]);
   const controls = useRef({ resume: () => {}, pause: () => {}, previous: () => {}, next: () => {} });
   function updateState(value: AudioState) { status.current = value; setState(value); }
   const halt = useCallback(() => {
+    stopBrowserSpeech();
     sequence.current++; controller.current?.abort(); controller.current = null;
     if (status.current === 'loading') activeTrack.current = '';
     if (ownsAudio.current) getChatAudio().pause();
@@ -62,11 +65,29 @@ export function useListeningAudio(article: SlowArticle) {
     }
   }
 
+  function fallback(at: number, token: number, previewText?: string) {
+    if (token !== sequence.current) return;
+    const audio = getChatAudio();
+    audio.onerror = null; audio.onended = null; audio.onplay = null; audio.onpause = null; audio.ontimeupdate = null;
+    audio.pause();
+    browserMode.current = true; activeTrack.current = '';
+    currentIndex.current = at; setIndex(at); updateState('playing'); setError('');
+    speakBrowser(previewText || article.sentences[at].en, () => {
+      if (token !== sequence.current) return;
+      if (!previewText && at + 1 < article.sentences.length) fallback(at + 1, token);
+      else updateState(previewText ? 'paused' : 'finished');
+    }, () => {
+      if (token !== sequence.current) return;
+      updateState('paused'); setError('设备语音不可用，请检查系统英语语音设置后再点播放。');
+    });
+  }
+
   async function start(at: number, gesture: boolean, previewText?: string) {
     if (!previewText) { currentIndex.current = at; setIndex(at); }
     const key = previewText ? 'preview:' + previewText : 'article:' + article.id + ':' + currentSpeed.current;
     if (status.current === 'loading' && activeTrack.current === key) return;
     halt();
+    browserMode.current = false;
     const token = sequence.current;
     ownsAudio.current = true;
     const audio = getChatAudio();
@@ -80,11 +101,8 @@ export function useListeningAudio(article: SlowArticle) {
       let track = cache.current.get(key);
       if (!track) {
         const sentences = article.sentences.map(sentence => sentence.en);
-        const response = await fetch('/api/tts', { method: 'POST', signal: abort.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: previewText || sentences.join(' '), ...(!previewText ? { sentences } : {}), voice: 'nova', level: article.level, mode: 'listening', speed: currentSpeed.current }) });
-        if (!response.ok) throw new Error('Jenny 语音暂不可用，请再试一次。');
-        const blob = await response.blob();
+        const { response, blob } = await fetchSpeech(previewText || sentences.join(' '), abort.signal, { speed: currentSpeed.current, voice: 'nova', level: article.level, ...(!previewText ? { sentences } : {}) });
         if (sequence.current !== token || abort.signal.aborted) return;
-        if (!blob.size) throw new Error('语音返回为空，请重试。');
         let times: number[] = [];
         try {
           const raw: unknown = JSON.parse(response.headers.get('X-Sentence-Times') || '[]');
@@ -104,21 +122,21 @@ export function useListeningAudio(article: SlowArticle) {
       if (audio.readyState >= 1) seek();
       audio.ontimeupdate = sync;
       audio.onended = () => { if (sequence.current === token) updateState(previewText ? 'paused' : 'finished'); };
-      audio.onerror = () => { if (sequence.current === token) { activeTrack.current = ''; pause(); setError('音频播放失败，请点击播放重试。'); } };
+      audio.onerror = () => fallback(currentIndex.current, token, previewText);
       audio.onplay = () => { if (sequence.current === token) updateState('playing'); };
       audio.onpause = () => { if (sequence.current === token && !audio.ended && status.current === 'playing') updateState('paused'); };
       await audio.play();
       if (sequence.current === token) updateState('playing');
     } catch (cause) {
       if (sequence.current !== token) return;
-      activeTrack.current = ''; updateState('paused');
-      setError(abort.signal.aborted ? '语音准备超时，请点击播放重试。' : cause instanceof Error && cause.name === 'NotAllowedError' ? '请再点一次播放，允许浏览器发声。' : cause instanceof Error ? cause.message : '暂时无法播放。');
+      fallback(currentIndex.current, token, previewText);
     } finally { window.clearTimeout(timeout); if (controller.current === abort) controller.current = null; }
   }
 
   function playAt(at: number, gesture = true) {
     const bounded = Math.max(0, Math.min(article.sentences.length - 1, at));
     currentIndex.current = bounded; setIndex(bounded);
+    if (browserMode.current) { halt(); fallback(bounded, sequence.current); return; }
     const audio = ownsAudio.current ? getChatAudio() : null;
     if (activeTrack.current === 'article:' + article.id + ':' + currentSpeed.current && audio && Number.isFinite(audio.duration) && audio.duration > 0) {
       audio.currentTime = timesFor(audio.duration)[bounded] || 0;
@@ -128,6 +146,10 @@ export function useListeningAudio(article: SlowArticle) {
   }
   async function resume() {
     if (status.current === 'loading' || status.current === 'playing') return;
+    if (browserMode.current) {
+      const at = status.current === 'finished' ? 0 : currentIndex.current;
+      halt(); primeChatAudio(); fallback(at, sequence.current); return;
+    }
     if (status.current !== 'finished' && activeTrack.current.startsWith('article:') && ownsAudio.current && getChatAudio().src) {
       const token = sequence.current;
       // Pause invalidates pending work; install fresh callbacks when resuming the same track.
@@ -135,9 +157,9 @@ export function useListeningAudio(article: SlowArticle) {
       audio.onended = () => { if (sequence.current === token) updateState('finished'); };
       audio.onplay = () => { if (sequence.current === token) updateState('playing'); };
       audio.onpause = () => { if (sequence.current === token && !audio.ended) updateState('paused'); };
-      audio.onerror = () => { if (sequence.current === token) { activeTrack.current = ''; pause(); setError('音频播放失败，请重试。'); } };
+      audio.onerror = () => fallback(currentIndex.current, token);
       try { await audio.play(); if (sequence.current === token) { updateState('playing'); setError(''); } }
-      catch { if (sequence.current === token) { updateState('paused'); setError('请再点一次播放。'); } }
+      catch { fallback(currentIndex.current, token); }
     } else {
       const at = status.current === 'finished' ? 0 : currentIndex.current;
       currentIndex.current = at; setIndex(at); await start(at, true);

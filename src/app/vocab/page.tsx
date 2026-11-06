@@ -1,4 +1,5 @@
 'use client';
+import { fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -71,6 +72,7 @@ export default function VocabPage() {
 
   const stopSpeech = useCallback(() => {
     speechRequest.current += 1;
+    stopBrowserSpeech();
     audioPending.current = null; setLoadingKey(null);
     speechController.current?.abort();
     const audio = getChatAudio();
@@ -228,29 +230,29 @@ export default function VocabPage() {
     const controller = new AbortController();
     speechController.current = controller;
     audioPending.current = key; setLoadingKey(key);
-    setSpeaking(key); setNotice('正在准备 Jenny 的美音…');
-    try {
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({ text, voice: 'en-US-JennyNeural', level: getUserLevel() }),
-      });
-      if (!response.ok) throw new Error('语音服务暂不可用');
-      const blob = await response.blob();
+    setSpeaking(key); setNotice('正在准备语音…');
+    let fallbackStarted = false;
+    const fallback = () => {
+      if (fallbackStarted) return;
+      fallbackStarted = true;
       if (requestId !== speechRequest.current) return;
-      if (!blob.size) throw new Error('语音服务返回为空');
+      audio.onerror = null; audio.onended = null; audio.pause();
+      setNotice('');
+      speakBrowser(text, () => { if (requestId === speechRequest.current) { stopSpeech(); setNotice(''); } }, () => { if (requestId === speechRequest.current) { stopSpeech(); setNotice('设备语音不可用，请检查系统英语语音设置。'); } });
+    };
+    try {
+      const { blob } = await fetchSpeech(text, controller.signal, { level: getUserLevel() });
+      if (requestId !== speechRequest.current) return;
       audioUrl.current = URL.createObjectURL(blob);
       audio.src = audioUrl.current;
       audio.onended = () => { stopSpeech(); setNotice(''); };
-      audio.onerror = () => { stopSpeech(); setNotice('语音播放失败，请再试一次。'); };
+      audio.onerror = fallback;
       await audio.play();
       if (requestId !== speechRequest.current) return;
       setNotice('');
     } catch (error) {
       if (requestId !== speechRequest.current) return;
-      setSpeaking(null);
-      setNotice(error instanceof Error ? error.message : '语音暂不可用。');
+      fallback();
     } finally { if (requestId === speechRequest.current) { audioPending.current = null; setLoadingKey(null); speechController.current = null; } }
   }, [speaking, stopSpeech]);
 

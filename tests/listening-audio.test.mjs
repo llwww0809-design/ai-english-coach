@@ -5,13 +5,14 @@ import ts from 'typescript';
 
 // Drive the real hook with a media element and delayed network, without a TTS service.
 test('continuous article audio: single request, timing, debounce, lock-screen controls and cleanup', async () => {
-  const keys = ['window', 'fetch', 'navigator', 'MediaMetadata', '__listenAudioTest'];
+  const keys = ['window', 'fetch', 'navigator', 'MediaMetadata', '__listenAudioTest', 'SpeechSynthesisUtterance'];
   const originals = Object.fromEntries(keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   const slots = [], cleanups = [], actions = new Map(), requests = [];
-  let cursor = 0, delayed = false, complete;
+  let cursor = 0, delayed = false, complete, failFetch = false, rejectPlay = false;
+  const spoken = [];
   const media = {
     src: '', duration: 30, currentTime: 0, readyState: 1, playbackRate: 1, ended: false, paused: true,
-    async play() { this.paused = false; this.onplay?.(); },
+    async play() { if (rejectPlay) { rejectPlay = false; throw new Error('NotAllowedError'); } this.paused = false; this.onplay?.(); },
     pause() { this.paused = true; this.onpause?.(); },
     removeAttribute() { this.src = ''; }, load() {},
   };
@@ -19,7 +20,8 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
   const session = { setActionHandler(action, handler) { actions.set(action, handler); }, setPositionState(value) { this.position = value; } };
   const install = (key, value) => Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   try {
-    install('window', { setTimeout, clearTimeout });
+    install('window', { setTimeout, clearTimeout, speechSynthesis: { cancel() {}, resume() {}, getVoices: () => [], speak(item) { spoken.push(item); } } });
+    install('SpeechSynthesisUtterance', class { constructor(text) { this.text = text; } });
     install('navigator', { mediaSession: session });
     install('MediaMetadata', class { constructor(value) { Object.assign(this, value); } });
     install('__listenAudioTest', {
@@ -32,12 +34,15 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     const audio = dataUrl('export const getChatAudio=()=>globalThis.__listenAudioTest.media; export const primeChatAudio=()=>{};');
     let js = ts.transpileModule(readFileSync(new URL('../src/hooks/use-listening-audio.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
     js = js.replace(/from ['"]react['"]/, "from '" + react + "'").replace(/from ['"]@\/lib\/chat-audio['"]/, "from '" + audio + "'");
+    const browserSpeech = dataUrl(ts.transpileModule(readFileSync(new URL('../src/lib/browser-speech.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+    js = js.replace(/from ['"]@\/lib\/browser-speech['"]/, "from '" + browserSpeech + "'");
     const { useListeningAudio } = await import(dataUrl(js));
     const article = { id: 'test', titleEn: 'Coffee', level: 'L1', audioSpeed: 0.8, sentences: [{ en: 'One.' }, { en: 'Two.' }, { en: 'Three.' }] };
     const render = () => { cursor = 0; return useListeningAudio(article); };
     const tick = () => new Promise(resolve => setTimeout(resolve, 5));
     install('fetch', async (_url, init) => {
       requests.push(JSON.parse(init.body));
+      if (failFetch) return new Response('{}', {status:502});
       const response = () => new Response(new Blob(['audio']), { headers: { 'Content-Type': 'audio/mpeg' } });
       if (delayed) { delayed = false; return new Promise(resolve => { complete = () => resolve(response()); }); }
       return response();
@@ -85,6 +90,18 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     assert.equal(requests.at(-1).text, 'word');
     media.onended(); hook = render();
     assert.equal(hook.state, 'paused');
+    failFetch = true;
+    hook.preview('fallback word'); await tick(); hook = render();
+    assert.equal(spoken.at(-1).text, 'fallback word');
+    assert.equal(spoken.at(-1).lang, 'en-US'); assert.equal(spoken.at(-1).rate, 0.9);
+    spoken.at(-1).onend(); hook = render(); assert.equal(hook.state, 'paused');
+    hook.playAt(1); await tick(); hook = render();
+    assert.equal(spoken.at(-1).text, 'Two.');
+    spoken.at(-1).onend(); hook = render(); assert.equal(hook.index, 2);
+    const stale = spoken.at(-1); hook.pause(); stale.onend(); hook = render();
+    assert.equal(hook.state, 'paused', 'Cancelled browser speech cannot advance playback');
+    failFetch = false; rejectPlay = true; hook.changeSpeed(0.8); hook.playAt(0); await tick();
+    assert.equal(spoken.at(-1).text, 'One.', 'Blocked Audio.play falls back to device speech');
     for (const cleanup of cleanups) cleanup?.();
     assert.equal(media.paused, true); assert.equal(media.src, ''); assert.equal(media.ontimeupdate, null);
     for (const action of ['play', 'pause', 'previoustrack', 'nexttrack']) assert.equal(actions.get(action), null);

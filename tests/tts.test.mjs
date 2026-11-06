@@ -6,6 +6,7 @@ import ts from 'typescript';
 const dataUrl = source => 'data:text/javascript;base64,' + Buffer.from(source).toString('base64');
 test('OpenAI TTS: defaults, MP3, GET speed, validation and safe errors', async () => {
   const oldKey = process.env.OPENAI_API_KEY;
+  const oldBase = process.env.OPENAI_BASE_URL;
   const calls = [];
   const originalError = console.error;
   globalThis.__ttsTest = { calls, fail: false };
@@ -23,6 +24,7 @@ test('OpenAI TTS: defaults, MP3, GET speed, validation and safe errors', async (
   const post = body => POST(new Request('http://localhost/api/tts', { method: 'POST', body: JSON.stringify(body) }));
   try {
     process.env.OPENAI_API_KEY = 'test-only';
+    process.env.OPENAI_BASE_URL = 'https://proxy.example/v1';
     let response = await post({text:' Hello! ', voice:'en-US-JennyNeural'});
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('Content-Type'), 'audio/mpeg');
@@ -30,6 +32,7 @@ test('OpenAI TTS: defaults, MP3, GET speed, validation and safe errors', async (
     assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [73,68,51,1,2]);
     assert.deepEqual(calls[0].body, { model:'tts-1', voice:'nova', input:'Hello!', speed:0.9, response_format:'mp3' });
     assert.equal(calls[0].options.maxRetries, 0);
+    assert.equal(calls[0].options.baseURL, 'https://proxy.example/v1');
     assert.ok(calls[0].opts.signal instanceof AbortSignal);
     response = await GET(new Request('http://localhost/api/tts?text=Hello&speed=0.8'));
     assert.equal(response.status, 200); assert.equal(calls.at(-1).body.speed, 0.8);
@@ -47,6 +50,7 @@ test('OpenAI TTS: defaults, MP3, GET speed, validation and safe errors', async (
   } finally {
     console.error = originalError;
     if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey;
+    if (oldBase === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = oldBase;
     delete globalThis.__ttsTest;
   }
 });

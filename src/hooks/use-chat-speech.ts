@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { speechText } from '@/lib/speech-text';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
+import { fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import { defaultVoice } from '@/lib/tts-voices';
 import { getUserLevel } from '@/lib/level-config';
 import { useUserLevel } from './use-user-level';
@@ -23,6 +24,7 @@ export function useChatSpeech(onNotice: (text: string) => void) {
 
   const stop = useCallback(() => {
     token.current++;
+    stopBrowserSpeech();
     request.current?.abort(); request.current = null;
     if (typeof window !== 'undefined' && typeof Audio !== 'undefined') {
       const player = getChatAudio(); player.onended = null; player.onerror = null;
@@ -68,22 +70,27 @@ export function useChatSpeech(onNotice: (text: string) => void) {
     const controller = new AbortController(); request.current = controller;
     playing.current = message.id; setSpeakingId(message.id);
     noticeRef.current('正在生成自然语音…点击小喇叭可取消');
-    try {
-      const response = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice: defaultVoice, level: getUserLevel() }), signal: controller.signal });
-      if (!response.ok) throw new Error('TTS request failed');
-      const blob = await response.blob();
+    let fallbackStarted = false;
+    const fallback = () => {
+      if (fallbackStarted) return;
+      fallbackStarted = true;
       if (controller.signal.aborted || generation !== token.current) return;
-      if (!blob.size || !response.headers.get('content-type')?.includes('audio/mpeg')) throw new Error('Invalid TTS audio');
+      const player = getChatAudio(); player.onerror = null; player.onended = null; player.pause();
+      noticeRef.current('正在使用设备语音朗读');
+      speakBrowser(text, () => { if (generation === token.current) { stop(); noticeRef.current(''); } }, () => { if (generation === token.current) { stop(); noticeRef.current('设备语音不可用，请检查系统英语语音设置后再点朗读。'); } });
+    };
+    try {
+      const { blob } = await fetchSpeech(text, controller.signal, { voice: defaultVoice, level: getUserLevel() });
+      if (controller.signal.aborted || generation !== token.current) return;
       const player = getChatAudio();
       objectUrl.current = URL.createObjectURL(blob); player.src = objectUrl.current;
       player.onended = () => { if (token.current !== generation) return; stop(); noticeRef.current('朗读完成。'); };
-      player.onerror = () => { if (token.current !== generation) return; stop(); noticeRef.current('音频播放失败，请点击小喇叭重试。'); };
+      player.onerror = fallback;
       await player.play();
       if (generation === token.current) noticeRef.current('正在朗读 · 点击小喇叭可停止');
     } catch (error) {
       if (controller.signal.aborted || generation !== token.current) return;
-      stop();
-      noticeRef.current(error instanceof Error && error.name === 'NotAllowedError' ? 'Safari 暂未允许自动播放，请点击回复旁的小喇叭。' : '微软语音暂不可用，请检查网络或点击小喇叭重试。');
+      fallback();
     } finally { if (request.current === controller) request.current = null; }
   }, [stop]);
 
