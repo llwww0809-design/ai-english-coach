@@ -22,6 +22,13 @@ test('idle prefetch deduplicates, bounds concurrency, persists and plays cached 
   };}});
   install('fetch',async()=>{calls++;active++;peak=Math.max(peak,active);await new Promise(r=>releases.push(r));active--;return new Response(new Uint8Array([73,68,51,1]),{headers:{'Content-Type':'audio/mpeg'}});});
   const speech=await load('first');
+  let coldTap=true;
+  const coldAudio={src:'',play(){assert.ok(coldTap,'Cold playback starts within the tap stack');assert.ok(this.src.startsWith('/api/tts?'));return Promise.resolve();},pause(){}};
+  const coldPlaying=speech.playSpeechSource(coldAudio,'First uncached word',new AbortController().signal);
+  coldTap=false;
+  await coldPlaying;
+  assert.equal(calls,0,'Cold playback uses the native media URL without awaiting fetch or blob');
+  assert.ok(coldAudio.src.includes('coach-tts-sarah-flash-22050-32-v2'),'Model and encoding changes invalidate previous audio');
   speech.prefetchSpeech(['borrow','borrow','arrive','decide']);speech.prefetchSpeech(['borrow']);
   assert.equal(calls,0,'No requests during render or before idle');
   idle.splice(0).forEach(fn=>fn());await tick();assert.equal(calls,2);assert.equal(peak,2);

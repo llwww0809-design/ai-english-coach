@@ -34,11 +34,11 @@ async function synthesize(request: Request, input: unknown) {
     }),
   ]).finally(() => clearTimeout(timer));
   try {
-    const speech = await timed(fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream?optimize_streaming_latency=3&output_format=mp3_44100_128', {
+    const speech = await timed(fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream?output_format=mp3_22050_32&optimize_streaming_latency=4', {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
       body: JSON.stringify({
-        text: text.trim(), model_id: 'eleven_turbo_v2_5',
+        text: text.trim(), model_id: 'eleven_flash_v2_5',
         voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       }),
       signal: controller.signal,
@@ -67,7 +67,7 @@ async function synthesize(request: Request, input: unknown) {
     return new Response(stream, {
       headers: {
         'Content-Type': 'audio/mpeg',
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
         'X-Content-Type-Options': 'nosniff',
         'X-Accel-Buffering': 'no',
       },

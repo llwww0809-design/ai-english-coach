@@ -80,7 +80,7 @@ export function playSpeechSource(audio: HTMLAudioElement, text: string, signal: 
 
 
 // Version covers voice/model/output settings so old provider audio cannot be reused.
-const AUDIO_CACHE = 'coach-tts-sarah-turbo-stream-v1';
+const AUDIO_CACHE = 'coach-tts-sarah-flash-22050-32-v2';
 const hotAudio = new Map<string, Blob>();
 const pendingAudio = new Map<string, Promise<void>>();
 const mediaUrls = new WeakMap<HTMLAudioElement, string>();

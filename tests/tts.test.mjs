@@ -24,12 +24,12 @@ test('ElevenLabs TTS: Sarah, MP3, validation, upstream errors and streaming dead
     };
     let response=await post({text:' Hello! ',speed:.8});
     assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'audio/mpeg');
-    assert.equal(response.headers.get('Cache-Control'),'public, max-age=31536000, immutable');
+    assert.equal(response.headers.get('Cache-Control'),'public, max-age=31536000, s-maxage=31536000, immutable');
     assert.deepEqual([...new Uint8Array(await response.arrayBuffer())],[73,68,51,1,2]);
-    assert.equal(calls[0].url,'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream?optimize_streaming_latency=3&output_format=mp3_44100_128');
+    assert.equal(calls[0].url,'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream?output_format=mp3_22050_32&optimize_streaming_latency=4');
     assert.equal(calls[0].init.method,'POST');assert.equal(calls[0].init.headers['xi-api-key'],'test-only');
     assert.equal(calls[0].init.headers['Content-Type'],'application/json');
-    assert.deepEqual(calls[0].body,{text:'Hello!',model_id:'eleven_turbo_v2_5',voice_settings:{stability:.5,similarity_boost:.75}});
+    assert.deepEqual(calls[0].body,{text:'Hello!',model_id:'eleven_flash_v2_5',voice_settings:{stability:.5,similarity_boost:.75}});
     assert.ok(calls[0].init.signal instanceof AbortSignal);
     const getResponse=await GET(new Request('http://localhost/api/tts?text=Hello&speed=0.8')); assert.equal(getResponse.status,200); await getResponse.arrayBuffer();
     for(const speed of [0,4.1,'0.8',null])assert.equal((await post({text:'Hello',speed})).status,400);
