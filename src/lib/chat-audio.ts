@@ -1,5 +1,4 @@
 'use client';
-import { primeBrowserSpeech } from './browser-speech';
 
 let audio: HTMLAudioElement | undefined;
 /** Reuse the exact element primed by the user gesture, including across chat routes. */
@@ -9,7 +8,6 @@ export function getChatAudio() {
 }
 
 export function primeChatAudio() {
-  primeBrowserSpeech();
   const player = getChatAudio();
   // A short, genuinely silent PCM WAV; no remote request or audible unlock sound.
   const bytes = new Uint8Array(844);

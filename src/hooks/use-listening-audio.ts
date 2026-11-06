@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
-import { fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { canFallbackSpeech, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import type { SlowArticle } from '@/lib/listening-storage';
 
 type AudioState = 'idle' | 'loading' | 'playing' | 'paused' | 'finished';
@@ -65,6 +65,12 @@ export function useListeningAudio(article: SlowArticle) {
     }
   }
 
+  function playbackError(token: number) {
+    if (token !== sequence.current) return;
+    getChatAudio().pause(); updateState('paused');
+    setError('音频播放受限或加载失败，请再次点击播放。');
+  }
+
   function fallback(at: number, token: number, previewText?: string) {
     if (token !== sequence.current) return;
     const audio = getChatAudio();
@@ -96,7 +102,7 @@ export function useListeningAudio(article: SlowArticle) {
     activeTrack.current = key;
     updateState('loading'); setError('');
     const abort = new AbortController(); controller.current = abort;
-    const timeout = window.setTimeout(() => abort.abort(), 40000);
+
     try {
       let track = cache.current.get(key);
       if (!track) {
@@ -122,21 +128,23 @@ export function useListeningAudio(article: SlowArticle) {
       if (audio.readyState >= 1) seek();
       audio.ontimeupdate = sync;
       audio.onended = () => { if (sequence.current === token) updateState(previewText ? 'paused' : 'finished'); };
-      audio.onerror = () => fallback(currentIndex.current, token, previewText);
+      audio.onerror = () => playbackError(token);
       audio.onplay = () => { if (sequence.current === token) updateState('playing'); };
       audio.onpause = () => { if (sequence.current === token && !audio.ended && status.current === 'playing') updateState('paused'); };
       await audio.play();
       if (sequence.current === token) updateState('playing');
     } catch (cause) {
       if (sequence.current !== token) return;
-      fallback(currentIndex.current, token, previewText);
-    } finally { window.clearTimeout(timeout); if (controller.current === abort) controller.current = null; }
+      if (abort.signal.aborted) return;
+      if (canFallbackSpeech(cause)) fallback(currentIndex.current, token, previewText);
+      else playbackError(token);
+    } finally { if (controller.current === abort) controller.current = null; }
   }
 
   function playAt(at: number, gesture = true) {
     const bounded = Math.max(0, Math.min(article.sentences.length - 1, at));
     currentIndex.current = bounded; setIndex(bounded);
-    if (browserMode.current) { halt(); fallback(bounded, sequence.current); return; }
+    if (browserMode.current) { void start(bounded, gesture); return; }
     const audio = ownsAudio.current ? getChatAudio() : null;
     if (activeTrack.current === 'article:' + article.id + ':' + currentSpeed.current && audio && Number.isFinite(audio.duration) && audio.duration > 0) {
       audio.currentTime = timesFor(audio.duration)[bounded] || 0;
@@ -148,7 +156,7 @@ export function useListeningAudio(article: SlowArticle) {
     if (status.current === 'loading' || status.current === 'playing') return;
     if (browserMode.current) {
       const at = status.current === 'finished' ? 0 : currentIndex.current;
-      halt(); primeChatAudio(); fallback(at, sequence.current); return;
+      await start(at, true); return;
     }
     if (status.current !== 'finished' && activeTrack.current.startsWith('article:') && ownsAudio.current && getChatAudio().src) {
       const token = sequence.current;
@@ -157,9 +165,9 @@ export function useListeningAudio(article: SlowArticle) {
       audio.onended = () => { if (sequence.current === token) updateState('finished'); };
       audio.onplay = () => { if (sequence.current === token) updateState('playing'); };
       audio.onpause = () => { if (sequence.current === token && !audio.ended) updateState('paused'); };
-      audio.onerror = () => fallback(currentIndex.current, token);
+      audio.onerror = () => playbackError(token);
       try { await audio.play(); if (sequence.current === token) { updateState('playing'); setError(''); } }
-      catch { fallback(currentIndex.current, token); }
+      catch { playbackError(token); }
     } else {
       const at = status.current === 'finished' ? 0 : currentIndex.current;
       currentIndex.current = at; setIndex(at); await start(at, true);

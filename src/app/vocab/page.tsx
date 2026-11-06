@@ -1,5 +1,5 @@
 'use client';
-import { fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { canFallbackSpeech, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -246,13 +246,14 @@ export default function VocabPage() {
       audioUrl.current = URL.createObjectURL(blob);
       audio.src = audioUrl.current;
       audio.onended = () => { stopSpeech(); setNotice(''); };
-      audio.onerror = fallback;
+      audio.onerror = () => { if (requestId === speechRequest.current) { stopSpeech(); setNotice('音频播放失败，请再点一次朗读。'); } };
       await audio.play();
       if (requestId !== speechRequest.current) return;
       setNotice('');
     } catch (error) {
       if (requestId !== speechRequest.current) return;
-      fallback();
+      if (canFallbackSpeech(error)) fallback();
+      else { stopSpeech(); setNotice('请再次点击朗读，允许浏览器播放音频。'); }
     } finally { if (requestId === speechRequest.current) { audioPending.current = null; setLoadingKey(null); speechController.current = null; } }
   }, [speaking, stopSpeech]);
 

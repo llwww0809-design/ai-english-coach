@@ -41,6 +41,7 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     const render = () => { cursor = 0; return useListeningAudio(article); };
     const tick = () => new Promise(resolve => setTimeout(resolve, 5));
     install('fetch', async (_url, init) => {
+      assert.equal(_url, '/api/tts'); assert.equal(init.method, 'POST');
       requests.push(JSON.parse(init.body));
       if (failFetch) return new Response('{}', {status:502});
       const response = () => new Response(new Blob(['audio']), { headers: { 'Content-Type': 'audio/mpeg' } });
@@ -95,13 +96,19 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     assert.equal(spoken.at(-1).text, 'fallback word');
     assert.equal(spoken.at(-1).lang, 'en-US'); assert.equal(spoken.at(-1).rate, 0.9);
     spoken.at(-1).onend(); hook = render(); assert.equal(hook.state, 'paused');
-    hook.playAt(1); await tick(); hook = render();
+    hook.changeSpeed(1.1); hook.playAt(1); await tick(); hook = render();
     assert.equal(spoken.at(-1).text, 'Two.');
     spoken.at(-1).onend(); hook = render(); assert.equal(hook.index, 2);
     const stale = spoken.at(-1); hook.pause(); stale.onend(); hook = render();
     assert.equal(hook.state, 'paused', 'Cancelled browser speech cannot advance playback');
-    failFetch = false; rejectPlay = true; hook.changeSpeed(0.8); hook.playAt(0); await tick();
-    assert.equal(spoken.at(-1).text, 'One.', 'Blocked Audio.play falls back to device speech');
+    failFetch = false;
+    const beforeRetry = requests.length, beforeSpeech = spoken.length;
+    await hook.toggle(); hook = render();
+    assert.equal(requests.length, beforeRetry + 1, 'A new tap retries TTS after service fallback');
+    assert.equal(hook.state, 'playing'); assert.equal(spoken.length, beforeSpeech);
+    hook.pause(); rejectPlay = true; await hook.toggle(); hook = render();
+    assert.equal(spoken.length, beforeSpeech, 'Blocked Audio.play must not switch to native speech');
+    assert.equal(hook.state, 'paused'); assert.ok(hook.error);
     for (const cleanup of cleanups) cleanup?.();
     assert.equal(media.paused, true); assert.equal(media.src, ''); assert.equal(media.ontimeupdate, null);
     for (const action of ['play', 'pause', 'previoustrack', 'nexttrack']) assert.equal(actions.get(action), null);

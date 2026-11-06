@@ -5,6 +5,7 @@ export const runtime = 'nodejs';
 async function synthesize(request: Request, input: unknown) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return Response.json({ error: '请提供朗读内容。' }, { status: 400 });
   const { text, speed = 0.9 } = input as Record<string, unknown>;
+  console.log('[TTS Request Received]:', text);
   if (typeof text !== 'string' || !text.trim() || text.length > 4000) {
     return Response.json({ error: '朗读内容须为 1–4000 字符。' }, { status: 400 });
   }
@@ -15,7 +16,7 @@ async function synthesize(request: Request, input: unknown) {
   if (!apiKey) return Response.json({ error: '语音服务尚未配置，请设置 OPENAI_API_KEY。' }, { status: 503 });
 
   try {
-    const client = new OpenAI({ apiKey, ...(process.env.OPENAI_BASE_URL?.trim() ? { baseURL: process.env.OPENAI_BASE_URL.trim() } : {}), timeout: 10000, maxRetries: 0 });
+    const client = new OpenAI({ apiKey, ...(process.env.OPENAI_BASE_URL?.trim() ? { baseURL: process.env.OPENAI_BASE_URL.trim() } : {}), timeout: 35000, maxRetries: 0 });
     // Always use an official OpenAI voice, including for legacy Jenny callers.
     const speech = await client.audio.speech.create({
       model: 'tts-1', voice: 'nova', input: text.trim(), speed, response_format: 'mp3',
@@ -34,11 +35,7 @@ async function synthesize(request: Request, input: unknown) {
     });
   } catch (error) {
     if (request.signal.aborted) return Response.json({ error: '语音请求已取消。' }, { status: 499 });
-    // Do not log SDK errors wholesale: they may include request details.
-    console.error('[TTS API] OpenAI speech synthesis failed', {
-      name: error instanceof Error ? error.name : 'UnknownError',
-      status: error instanceof OpenAI.APIError ? error.status : undefined,
-    });
+    console.error('[TTS API] OpenAI speech synthesis failed', error);
     return Response.json({ error: '语音合成暂不可用，请稍后重试。' }, { status: 502 });
   }
 }

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { speechText } from '@/lib/speech-text';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
-import { fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { canFallbackSpeech, fetchSpeech, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import { defaultVoice } from '@/lib/tts-voices';
 import { getUserLevel } from '@/lib/level-config';
 import { useUserLevel } from './use-user-level';
@@ -85,12 +85,13 @@ export function useChatSpeech(onNotice: (text: string) => void) {
       const player = getChatAudio();
       objectUrl.current = URL.createObjectURL(blob); player.src = objectUrl.current;
       player.onended = () => { if (token.current !== generation) return; stop(); noticeRef.current('朗读完成。'); };
-      player.onerror = fallback;
+      player.onerror = () => { if (generation === token.current) { stop(); noticeRef.current('音频播放失败，请再点一次朗读。'); } };
       await player.play();
       if (generation === token.current) noticeRef.current('正在朗读 · 点击小喇叭可停止');
     } catch (error) {
       if (controller.signal.aborted || generation !== token.current) return;
-      fallback();
+      if (canFallbackSpeech(error)) fallback();
+      else { stop(); noticeRef.current('请再次点击朗读，允许浏览器播放音频。'); }
     } finally { if (request.current === controller) request.current = null; }
   }, [stop]);
 
