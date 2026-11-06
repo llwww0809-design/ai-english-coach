@@ -1,5 +1,5 @@
 'use client';
-import { playSpeechSource, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { prefetchSpeech, playSpeechSource, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -212,6 +212,9 @@ export default function VocabPage() {
   const knownCount = (pack: TopicPack) => pack.words.filter(word => topicProgress[pack.id]?.includes(word.id)).length;
   const topicCurrent = activePack?.words[topicIndex];
   const visibleTopicWords = activePack?.words.filter(word => topicFilter === 'all' || !topicProgress[activePack.id]?.includes(word.id) || leavingTopicIds.includes(word.id)) || [];
+
+  const prefetchTexts = JSON.stringify(selectedItem ? [selectedItem.word, selectedItem.exampleEn] : view === 'daily' ? [current?.word, current?.exampleEn, recommendations[dailyState.currentIndex + 1]?.word] : view === 'bank' ? bank.slice(0, 6).map(word => word.word) : topicMode === 'practice' ? [topicCurrent?.word, topicCurrent?.exampleEn] : visibleTopicWords.slice(0, 6).map(word => word.word));
+  useEffect(() => prefetchSpeech((JSON.parse(prefetchTexts) as Array<string | null>).filter((text): text is string => Boolean(text))), [prefetchTexts]);
 
   useEffect(() => {
     if (topicMode !== 'practice' || !activePack || !topicCurrent || !topicProgress[activePack.id]?.includes(topicCurrent.id)) return;

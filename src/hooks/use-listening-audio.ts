@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
-import { startSpeechPlayback, playSpeechSource, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
+import { prefetchSpeech, startSpeechPlayback, playSpeechSource, speakBrowser, stopBrowserSpeech } from '@/lib/browser-speech';
 import type { SlowArticle } from '@/lib/listening-storage';
 
 type AudioState = 'idle' | 'loading' | 'playing' | 'paused' | 'finished';
 
 /** One continuous article track avoids network requests between sentences in the background. */
 export function useListeningAudio(article: SlowArticle) {
+  useEffect(() => prefetchSpeech([
+    article.sentences.map(sentence => sentence.en).join(' '),
+    ...article.sentences.slice(0, 2).map(sentence => sentence.en),
+  ], article.audioSpeed), [article.id, article.audioSpeed, article.sentences]);
   const [index, setIndex] = useState(0);
   const [speed, setSpeed] = useState(article.audioSpeed);
   const [state, setState] = useState<AudioState>('idle');

@@ -1,4 +1,5 @@
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 async function synthesize(request: Request, input: unknown) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return Response.json({ error: '请提供朗读内容。' }, { status: 400 });
@@ -16,53 +17,65 @@ async function synthesize(request: Request, input: unknown) {
     return Response.json({ error: '语音服务尚未配置，请设置 ELEVENLABS_API_KEY。' }, { status: 500 });
   }
 
+
   const controller = new AbortController();
   const cancel = () => controller.abort(request.signal.reason);
   request.signal.addEventListener('abort', cancel, { once: true });
   if (request.signal.aborted) cancel();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error('ElevenLabs TTS exceeded the 8000ms deadline');
-      reject(error); controller.abort(error);
-    }, 8000);
-  });
-  const startedAt = Date.now();
+  const cleanup = () => { clearTimeout(timer); request.signal.removeEventListener('abort', cancel); };
+  const timed = <T,>(operation: Promise<T>): Promise<T> => Promise.race([
+    operation,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error('ElevenLabs TTS exceeded the 8000ms deadline');
+        controller.abort(error); reject(error);
+      }, 8000);
+    }),
+  ]).finally(() => clearTimeout(timer));
   try {
-    console.log('[TTS Upstream Start]:', { provider: 'ElevenLabs', voice: 'Sarah', timeoutMs: 8000 });
-    const bytes = await Promise.race([(async () => {
-      const speech = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL', {
-        method: 'POST',
-        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-        body: JSON.stringify({
-          text: text.trim(), model_id: 'eleven_turbo_v2_5',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-        signal: controller.signal,
-      });
-      console.log('[TTS Upstream Response]:', { status: speech.status, elapsedMs: Date.now() - startedAt });
-      if (!speech.ok) throw new Error('ElevenLabs HTTP ' + speech.status + ': ' + await speech.text());
-      if (!speech.headers.get('content-type')?.includes('audio/mpeg')) throw new Error('ElevenLabs returned invalid audio content type');
-      return speech.arrayBuffer();
-    })(), deadline]);
-    if (!bytes.byteLength) throw new Error('Empty speech response');
-    console.log('[TTS Synthesis Complete]:', { bytes: bytes.byteLength, elapsedMs: Date.now() - startedAt });
-    return new Response(bytes, {
+    const speech = await timed(fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream?optimize_streaming_latency=3&output_format=mp3_44100_128', {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      body: JSON.stringify({
+        text: text.trim(), model_id: 'eleven_turbo_v2_5',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      }),
+      signal: controller.signal,
+    }));
+    console.log('[TTS Upstream Response]:', { status: speech.status, streaming: true });
+    if (!speech.ok) throw new Error('ElevenLabs HTTP ' + speech.status + ': ' + await timed(speech.text()));
+    if (!speech.headers.get('content-type')?.includes('audio/mpeg') || !speech.body) throw new Error('ElevenLabs returned invalid audio content');
+    const reader = speech.body.getReader();
+    // Pull one chunk at a time: preserve backpressure without buffering the MP3.
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(output) {
+        try {
+          const { value, done } = await timed(reader.read());
+          if (done) { cleanup(); reader.releaseLock(); output.close(); }
+          else output.enqueue(value);
+        } catch (error) {
+          console.error('[TTS API] Audio stream interrupted', error);
+          controller.abort(error); cleanup();
+          await reader.cancel(error).catch(() => {}); output.error(error);
+        }
+      },
+      async cancel(reason) {
+        controller.abort(reason); cleanup(); await reader.cancel(reason).catch(() => {});
+      },
+    });
+    return new Response(stream, {
       headers: {
         'Content-Type': 'audio/mpeg',
-        'Content-Length': String(bytes.byteLength),
-        // Keep spoken user content out of shared/CDN caches. GET responses may be
-        // reused by the browser; POST tracks are also cached by the audio player.
-        'Cache-Control': 'private, max-age=86400',
+        'Cache-Control': 'public, max-age=31536000, immutable',
         'X-Content-Type-Options': 'nosniff',
+        'X-Accel-Buffering': 'no',
       },
     });
   } catch (error) {
+    controller.abort(error); cleanup();
     console.error('[TTS API] ElevenLabs speech synthesis failed', error);
     return Response.json({ error: '语音合成暂不可用，请稍后重试。' }, { status: 500 });
-  } finally {
-    clearTimeout(timer);
-    request.signal.removeEventListener('abort', cancel);
   }
 }
 

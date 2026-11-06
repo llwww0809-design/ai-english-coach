@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 const dataUrl = source => 'data:text/javascript;base64,' + Buffer.from(source).toString('base64');
-test('ElevenLabs TTS: Sarah, MP3, validation, upstream errors and body deadline', async () => {
+test('ElevenLabs TTS: Sarah, MP3, validation, upstream errors and streaming deadlines', async () => {
   const oldKey=process.env.ELEVENLABS_API_KEY, oldFetch=globalThis.fetch, oldTimer=globalThis.setTimeout;
   const oldError=console.error, oldLog=console.log;
   const calls=[], errors=[]; let mode='success';
@@ -16,7 +16,7 @@ test('ElevenLabs TTS: Sarah, MP3, validation, upstream errors and body deadline'
     globalThis.fetch=async(url,init)=>{
       calls.push({url,init,body:JSON.parse(init.body)});
       if(mode==='headers')return new Promise(()=>{});
-      if(mode==='body')return {ok:true,status:200,headers:new Headers({'Content-Type':'audio/mpeg'}),arrayBuffer:()=>new Promise(()=>{})};
+      if(mode==='body')return new Response(new ReadableStream({ start(output) { output.enqueue(new Uint8Array([73])); } }),{headers:{'Content-Type':'audio/mpeg'}});
       if(mode==='upstream')return new Response('private upstream details',{status:401});
       if(mode==='network')throw new TypeError('network disconnected');
       if(mode==='invalid')return new Response('{}',{headers:{'Content-Type':'application/json'}});
@@ -24,14 +24,14 @@ test('ElevenLabs TTS: Sarah, MP3, validation, upstream errors and body deadline'
     };
     let response=await post({text:' Hello! ',speed:.8});
     assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'audio/mpeg');
-    assert.equal(response.headers.get('Cache-Control'),'private, max-age=86400');
+    assert.equal(response.headers.get('Cache-Control'),'public, max-age=31536000, immutable');
     assert.deepEqual([...new Uint8Array(await response.arrayBuffer())],[73,68,51,1,2]);
-    assert.equal(calls[0].url,'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL');
+    assert.equal(calls[0].url,'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream?optimize_streaming_latency=3&output_format=mp3_44100_128');
     assert.equal(calls[0].init.method,'POST');assert.equal(calls[0].init.headers['xi-api-key'],'test-only');
     assert.equal(calls[0].init.headers['Content-Type'],'application/json');
     assert.deepEqual(calls[0].body,{text:'Hello!',model_id:'eleven_turbo_v2_5',voice_settings:{stability:.5,similarity_boost:.75}});
     assert.ok(calls[0].init.signal instanceof AbortSignal);
-    assert.equal((await GET(new Request('http://localhost/api/tts?text=Hello&speed=0.8'))).status,200);
+    const getResponse=await GET(new Request('http://localhost/api/tts?text=Hello&speed=0.8')); assert.equal(getResponse.status,200); await getResponse.arrayBuffer();
     for(const speed of [0,4.1,'0.8',null])assert.equal((await post({text:'Hello',speed})).status,400);
     for(const text of ['', 'a'.repeat(4001)])assert.equal((await post({text})).status,400);
     assert.equal((await POST(new Request('http://localhost/api/tts',{method:'POST',body:'{'}))).status,400);
@@ -45,7 +45,13 @@ test('ElevenLabs TTS: Sarah, MP3, validation, upstream errors and body deadline'
     }
     globalThis.setTimeout=(fn,ms)=>{assert.equal(ms,8000);return oldTimer(fn,1);};
     for(mode of ['headers','body']){
-      response=await post({text:'Timeout test'});assert.equal(response.status,500);
+      response=await post({text:'Timeout test'});
+      if(mode==='body') {
+        assert.equal(response.status,200);
+        const reader=response.body.getReader();
+        assert.deepEqual([...((await reader.read()).value)],[73], 'The first chunk arrives before synthesis finishes');
+        await assert.rejects(reader.read(), /8000ms deadline/);
+      } else assert.equal(response.status,500);
       assert.equal(calls.at(-1).init.signal.aborted,true);
       assert.match(errors.at(-1)[1].stack,/8000ms deadline/);
     }

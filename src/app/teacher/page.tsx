@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { getMockTeacherReply } from '@/lib/mock-teacher';
 import styles from './teacher.module.css';
+import { prefetchSpeech } from '@/lib/browser-speech';
+import { speechText } from '@/lib/speech-text';
 import { getCurrentSessionId, getSessions, saveSession, deleteSession, setCurrentSessionId, type ChatSession, type ChatMessage as Message } from '@/lib/chat-storage';
 import { addActivity } from '@/lib/activity-storage';
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
@@ -41,6 +43,7 @@ export default function TeacherPage() {
  const [hydrated, setHydrated] = useState(false);
  const [storageWarning, setStorageWarning] = useState('');
  const [isTyping, setIsTyping] = useState(false);
+
  const [notice, setNotice] = useState('');
  const [expandedTranslations, setExpandedTranslations] = useState<Set<number>>(() => new Set());
  const [sessionId, setSessionId] = useState<string | null>(null);
@@ -55,6 +58,12 @@ export default function TeacherPage() {
  const { level } = useLearningLevel();
  const chatSpeech = useChatSpeech(setNotice);
  const { speakingId, available: speechAvailable, stop: stopSpeech, speak } = chatSpeech;
+ useEffect(() => {
+  if (isTyping || speakingId !== null || !hydrated) return;
+  const latest = messages.filter(message => message.role === 'assistant').at(-1);
+  if (latest) return prefetchSpeech([speechText(latest.content)]);
+ }, [messages, isTyping, speakingId, hydrated]);
+
  const listRef = useRef<HTMLDivElement>(null);
  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
  const vocabToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
