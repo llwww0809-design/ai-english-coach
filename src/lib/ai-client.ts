@@ -2,7 +2,7 @@ import { FeedbackStream, type ExpressionFeedback } from './feedback';
 import { getUserLevel, type LearningLevel } from './level-config';
 
 export async function requestAiReply(messages: { role: 'user' | 'assistant'; content: string }[], prompt?: string, onDelta?: (text: string) => void, signal?: AbortSignal, onFeedback?: (feedback: ExpressionFeedback | undefined) => void, _level?: LearningLevel, targetWords: string[] = []) {
-  const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages, prompt, level: _level ?? getUserLevel(), targetWords }), signal });
+  const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages, prompt, level: getUserLevel(), targetWords }), signal });
   if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || 'AI request failed'); }
   if (!response.body) throw new Error('AI returned no stream');
   const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let full = ''; let finished = false;

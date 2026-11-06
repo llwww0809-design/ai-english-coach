@@ -25,3 +25,26 @@
 .practiceTip{display:flex;align-items:center;gap:4px;max-width:100%;margin:0 0 6px;padding:5px 9px;border:1px solid #e6e6e6;border-radius:9px;background:#f2f2f2;color:#727272;font-size:11px;text-align:left;overflow:hidden}.practiceTip b{color:#0d0d0d;white-space:nowrap}.practiceTip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .page{background:#f9f9f9}.workspace{background:#fff;border:1px solid #e5e5e5;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}.header,.composer{background:#fff}.header{border-bottom-color:#e5e5e5}.composer{border-top-color:#e5e5e5}.bubble{border-color:#e5e5e5;border-radius:12px}.userRow .bubble{border-radius:12px}.messageAvatar{filter:grayscale(1)}.inputBar{background:#f4f4f4;border-color:#e5e5e5;border-radius:12px}.inputBar:focus-within{border-color:#a1a1aa;box-shadow:0 0 0 3px rgba(0,0,0,.05)}.newChat,.historyButton,.drawerNew{background:#fff;border-color:#e5e5e5;border-radius:8px}.drawerNew{background:#0d0d0d;color:#fff;border-color:#0d0d0d}.historyDrawer{background:#fff}
+/* Keep the composer inside the visible viewport when mobile keyboards resize or pan it. */
+.page{position:fixed;top:var(--chat-top,0px);left:0;right:0;height:var(--chat-height,100dvh);min-height:0;padding-bottom:calc(var(--global-nav-height) + 8px)}
+.workspace{min-height:0}
+:global(html[data-chat-input-active]) .page{padding-bottom:0}
+.inputBar{align-items:flex-end;gap:8px;padding:6px;background:#f4f4f4;border-radius:12px;box-shadow:none}
+.inputBar:focus-within{box-shadow:none}
+.inputBar textarea{height:auto;min-height:40px;max-height:112px;overflow-y:auto;background:#fff;border-radius:8px;padding:9px 10px;font-size:16px;line-height:22px}
+.mic{width:40px;height:40px;min-width:40px;min-height:40px;border:1px solid #d4d4d8;border-radius:50%;color:#333;flex-shrink:0}
+.send{width:36px;height:40px;border-radius:8px}
+.holdToTalk{flex:1;min-width:0;height:40px;border:1px solid #dedede;border-radius:8px;background:#fff;color:#18181b;font-size:15px;font-weight:600;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.holdActive{background:#ddd}
+.holdToTalk:disabled{opacity:.55}
+.recordError{margin:6px 4px 0;font-size:12px;color:#a33}
+.recordOverlay{position:absolute;inset:0;z-index:90;display:grid;place-items:center;pointer-events:none}
+.recordCard{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;width:230px;padding:30px 16px;border-radius:16px;background:rgba(24,24,27,.88);backdrop-filter:blur(12px);color:#fff}
+.recordCard strong{font-size:14px;font-weight:500}
+.recordCancel{background:rgba(137,32,39,.92)}
+.recordSymbol{font-size:56px;line-height:64px}
+.recordWaves{display:flex;align-items:center;justify-content:center;gap:6px;height:64px}
+.recordWaves i{display:block;width:5px;height:28px;border-radius:4px;background:#fff;animation:voiceWave .75s ease-in-out infinite alternate}
+@keyframes voiceWave{to{transform:scaleY(1.9);opacity:.65}}
+@media(max-width:600px){.page{padding:0 0 var(--global-nav-height)}.workspace{border:0;border-radius:0}.composer{padding:6px 8px}.header{min-height:64px;padding-top:max(10px,env(safe-area-inset-top))}:global(html[data-chat-input-active]) .page{padding-bottom:0}}
+@media(prefers-reduced-motion:reduce){.recordWaves i{animation:none}}

@@ -4,7 +4,8 @@ import { getMockTeacherReply } from '@/lib/mock-teacher';
 import styles from './teacher.module.css';
 import { getCurrentSessionId, getSessions, saveSession, deleteSession, setCurrentSessionId, type ChatSession, type ChatMessage as Message } from '@/lib/chat-storage';
 import { addActivity } from '@/lib/activity-storage';
-import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
+import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
+import { useChatViewport } from '@/hooks/use-chat-viewport';
 import { requestAiReply } from '@/lib/ai-client';
 import { useChatSpeech } from '@/hooks/use-chat-speech';
 import { ExpressionFeedbackCard } from '@/components/expression-feedback';
@@ -22,8 +23,14 @@ function sentenceForWord(content: string, word: string) {
 export default function TeacherPage() {
  const [messages, setMessages] = useState<Message[]>([greeting]);
  const [draft, setDraft] = useState('');
+ const [voiceMode, setVoiceMode] = useState(false);
+ const viewportRef = useChatViewport();
  const [practiceWords, setPracticeWords] = useState<VocabItem[]>([]);
  const inputRef = useRef<HTMLTextAreaElement>(null);
+ useEffect(() => {
+  const input = inputRef.current;
+  if (input) { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 112) + 'px'; }
+ }, [draft, voiceMode]);
  useEffect(() => {
   const refresh = () => setPracticeWords(getBankList().filter(word => word.level === getUserLevel()).sort((a, b) => b.addedAt - a.addedAt).slice(0, 3));
   refresh();
@@ -55,9 +62,7 @@ export default function TeacherPage() {
  const requestRef = useRef<AbortController | null>(null);
  const nextId = useRef(1);
  const turnRef = useRef(0);
- const handleSpeechText = useCallback((text: string) => setDraft(text), []);
- const speechInput = useSpeechRecognition(handleSpeechText);
- useEffect(() => { if (speechInput.error) setNotice(speechInput.error); else if (speechInput.listening) setNotice('正在聆听英文…说完后会自动停止'); }, [speechInput.error, speechInput.listening]);
+ const speechInput = useVoiceRecorder(text => { setDraft(text); void send(undefined, text); }, chatSpeech.prepare);
  useEffect(() => {
   try {
    const stored = getSessions();
@@ -104,6 +109,7 @@ export default function TeacherPage() {
   } catch { setStorageWarning('重命名未能保存，请检查浏览器本地存储。'); }
  }
  function openSession(session: ChatSession) {
+  speechInput.cancel();
   requestRef.current?.abort(); stopSpeech(); setSessionId(session.id); setCurrentSessionId(session.id); setMessages(session.messages); setDraft(''); setIsTyping(false); setExpandedTranslations(new Set()); setSavedSuggestions(new Set()); nextId.current = Math.max(...session.messages.map(message => message.id), 0) + 1; turnRef.current = session.messages.filter(message => message.role === 'assistant').length - 1; setHistoryOpen(false); setNotice(`已载入「${session.title}」`);
  }
  function removeSession(session: ChatSession) {
@@ -115,6 +121,7 @@ export default function TeacherPage() {
  }
  function startNewChat(skipConfirm = false) {
   if (!skipConfirm && !window.confirm('开始新对话？当前聊天记录会保留在历史记录中。')) return;
+  speechInput.cancel();
   requestRef.current?.abort(); requestRef.current = null;
   if (timerRef.current) clearTimeout(timerRef.current);
   sendingRef.current = false; nextId.current = 1; turnRef.current = 0;
@@ -136,9 +143,9 @@ export default function TeacherPage() {
   viewport?.addEventListener('resize', keepLatestVisible);
   return () => viewport?.removeEventListener('resize', keepLatestVisible);
  }, []);
- async function send(event?: FormEvent) {
+ async function send(event?: FormEvent, recognizedText?: string) {
   event?.preventDefault();
-  const text = draft.trim();
+  const text = (recognizedText ?? draft).trim();
   if (!text || sendingRef.current || !hydrated) return;
   chatSpeech.prepare();
   sendingRef.current = true;
@@ -190,7 +197,7 @@ export default function TeacherPage() {
  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
   if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
  }
- return <div className={styles.page}>{vocabToast && <div className={styles.vocabToast} role="status">已加入口语词库</div>}<div className={styles.workspace}>
+ return <div className={styles.page} ref={viewportRef}>{vocabToast && <div className={styles.vocabToast} role="status">已加入口语词库</div>}<div className={styles.workspace}>
   <header className={styles.header}><button type="button" className={styles.historyButton} onClick={() => setHistoryOpen(true)} aria-label="打开历史记录" title="历史记录">☰</button><div className={styles.identity}><h1>Jenny</h1><span>• 在线 · 你的美式口语搭子</span></div><div className={styles.headerActions}><button type="button" className={styles.newChat} onClick={() => startNewChat()} disabled={!hydrated} title="保留当前对话并开始新对话">＋ 新对话</button></div></header>
   <div className={`${styles.drawerBackdrop} ${historyOpen ? styles.drawerBackdropOpen : ''}`} onClick={() => setHistoryOpen(false)} aria-hidden={!historyOpen} />
   <aside className={`${styles.historyDrawer} ${historyOpen ? styles.historyDrawerOpen : ''}`} aria-label="历史对话" aria-hidden={!historyOpen}>
@@ -210,9 +217,9 @@ export default function TeacherPage() {
    </div>
   </div>
   <div className={styles.composer}>{practiceWords.length > 0 && <button type="button" className={styles.practiceTip} onClick={() => { setDraft(current => `${current.trimEnd()}${current.trim() ? ' ' : ''}${practiceWords[0].word} `); inputRef.current?.focus(); }} aria-label={`练习生词 ${practiceWords[0].word}，点击插入输入框`}>💡 试着在对话中用用这个词：<b>{practiceWords[0].word}</b><span>[{practiceWords[0].translation}]</span></button>}<form onSubmit={send} className={styles.inputBar}>
-   <button type="button" className={`${styles.mic} ${speechInput.listening ? styles.micListening : ''}`} aria-label={speechInput.listening ? '停止语音输入' : '开始语音输入'} onClick={() => { chatSpeech.prepare(); speechInput.toggle(); }}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
-   <label className={styles.srOnly} htmlFor="chat-message">输入英文消息</label><textarea ref={inputRef} id="chat-message" rows={2} maxLength={2000} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={handleKeyDown} placeholder="用英语聊聊你的一天…" />
-   <button type="submit" className={styles.send} disabled={!hydrated || !draft.trim() || isTyping} aria-label="发送消息">↑</button>
-  </form><div className={styles.srOnly} role="status">{storageWarning || notice}</div></div>
-  </div>{selectedWord && <div className={styles.wordPopover} role="dialog" style={{ left: wordPopoverPosition.x, top: wordPopoverPosition.y, bottom: 'auto' }}><div className={styles.popoverWord}><strong>{selectedWord}</strong><small>{getWordReference(selectedWord, level).phonetic || '音标待补充'}</small><span>{getWordReference(selectedWord, level).translation}</span></div><button type="button" onClick={() => void chatSpeech.speak({ id: -1, content: selectedWord })} aria-label={`朗读 ${selectedWord}`}>🔊</button><button type="button" onClick={saveChatWord}>＋ 收入词库</button><button type="button" onClick={() => setSelectedWord(null)} aria-label="关闭">×</button></div>}</div>;
+   <button type="button" className={styles.mic} aria-label={voiceMode ? '切换文字键盘' : '切换按住说话'} aria-pressed={voiceMode} disabled={speechInput.phase === 'transcribing'} onClick={() => { speechInput.cancel(); setVoiceMode(value => !value); if (!voiceMode) inputRef.current?.blur(); else requestAnimationFrame(() => inputRef.current?.focus()); }}>{voiceMode ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M5 9h2m3 0h2m3 0h3M5 12h2m3 0h2m3 0h3M7 16h10"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>}</button>
+   {voiceMode ? <button type="button" className={`${styles.holdToTalk} ${speechInput.phase === 'recording' ? styles.holdActive : ''}`} disabled={!hydrated || isTyping || speechInput.phase === 'transcribing'} aria-label="按住说话，松开发送，上滑取消。键盘可按住空格录音" aria-busy={speechInput.phase === 'transcribing'} onContextMenu={event => event.preventDefault()} onPointerDown={event => { if (!event.isPrimary || event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void speechInput.start(event.clientY); }} onPointerMove={event => speechInput.move(event.clientY)} onPointerUp={() => speechInput.finish()} onPointerCancel={() => speechInput.finish(true)} onLostPointerCapture={() => speechInput.finish(true)} onKeyDown={event => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) { event.preventDefault(); void speechInput.start(0); } if (event.key === 'Escape') speechInput.finish(true); }} onKeyUp={event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); speechInput.finish(); } }}>{speechInput.phase === 'transcribing' ? '正在识别…' : speechInput.phase === 'requesting' ? '正在开启麦克风…' : speechInput.phase === 'recording' ? '松开 发送' : '按住 说话'}</button> : <><label className={styles.srOnly} htmlFor="chat-message">输入英文消息</label><textarea ref={inputRef} id="chat-message" rows={1} maxLength={2000} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={handleKeyDown} placeholder="用英语聊聊你的一天..." /></>}
+   <button type="submit" className={styles.send} disabled={!hydrated || !draft.trim() || isTyping || speechInput.phase !== 'idle'} onPointerDown={event => event.preventDefault()} aria-label="发送消息">↑</button>
+  </form>{speechInput.error && <p className={styles.recordError} role="alert">{speechInput.error}</p>}<div className={styles.srOnly} role="status">{storageWarning || notice}</div></div>
+  </div>{(speechInput.phase === 'recording' || speechInput.phase === 'requesting') && <div className={styles.recordOverlay} role="status" aria-live="polite"><div className={`${styles.recordCard} ${speechInput.cancelling ? styles.recordCancel : ''}`}>{speechInput.cancelling ? <span className={styles.recordSymbol} aria-hidden="true">×</span> : <div className={styles.recordWaves} aria-hidden="true">{[0,1,2,3,4].map(i => <i key={i} style={{ animationDelay: i * 0.12 + 's' }} />)}</div>}<strong>{speechInput.phase === 'requesting' ? '请允许使用麦克风' : speechInput.cancelling ? '松开手指，取消发送' : '松开发送，上滑取消'}</strong></div></div>}{selectedWord && <div className={styles.wordPopover} role="dialog" style={{ left: wordPopoverPosition.x, top: wordPopoverPosition.y, bottom: 'auto' }}><div className={styles.popoverWord}><strong>{selectedWord}</strong><small>{getWordReference(selectedWord, level).phonetic || '音标待补充'}</small><span>{getWordReference(selectedWord, level).translation}</span></div><button type="button" onClick={() => void chatSpeech.speak({ id: -1, content: selectedWord })} aria-label={`朗读 ${selectedWord}`}>🔊</button><button type="button" onClick={saveChatWord}>＋ 收入词库</button><button type="button" onClick={() => setSelectedWord(null)} aria-label="关闭">×</button></div>}</div>;
 }
