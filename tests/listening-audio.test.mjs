@@ -38,7 +38,7 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     const tick = () => new Promise(resolve => setTimeout(resolve, 5));
     install('fetch', async (_url, init) => {
       requests.push(JSON.parse(init.body));
-      const response = () => new Response(new Blob(['audio']), { headers: { 'X-Sentence-Times': '[0,10,20]' } });
+      const response = () => new Response(new Blob(['audio']), { headers: { 'Content-Type': 'audio/mpeg' } });
       if (delayed) { delayed = false; return new Promise(resolve => { complete = () => resolve(response()); }); }
       return response();
     });
@@ -49,6 +49,9 @@ test('continuous article audio: single request, timing, debounce, lock-screen co
     await hook.toggle(); hook = render();
     assert.equal(hook.state, 'playing');
     assert.equal(requests[0].text, 'One. Two. Three.');
+    assert.equal(requests[0].voice, 'nova');
+    assert.equal(requests[0].speed, 0.8);
+    assert.ok(media.src.startsWith('blob:'), 'Plain MP3 without timing metadata is playable');
     assert.deepEqual(requests[0].sentences, ['One.', 'Two.', 'Three.']);
     media.currentTime = 12; media.ontimeupdate(); hook = render();
     assert.equal(hook.index, 1);

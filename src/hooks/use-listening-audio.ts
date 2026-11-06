@@ -43,7 +43,7 @@ export function useListeningAudio(article: SlowArticle) {
 
   function timesFor(duration: number) {
     if (sentenceTimes.current.length === article.sentences.length) return sentenceTimes.current;
-    // Older providers may omit boundaries; use weighted estimates only as a fallback.
+    // OpenAI MP3 has no sentence boundaries; estimate positions by word count.
     const weights = article.sentences.map(sentence => Math.max(1, sentence.en.split(/\s+/).length));
     const total = weights.reduce((sum, count) => sum + count, 0);
     let elapsed = 0;
@@ -80,7 +80,7 @@ export function useListeningAudio(article: SlowArticle) {
       let track = cache.current.get(key);
       if (!track) {
         const sentences = article.sentences.map(sentence => sentence.en);
-        const response = await fetch('/api/tts', { method: 'POST', signal: abort.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: previewText || sentences.join(' '), ...(!previewText ? { sentences } : {}), voice: 'en-US-JennyNeural', level: article.level, mode: 'listening', speed: currentSpeed.current }) });
+        const response = await fetch('/api/tts', { method: 'POST', signal: abort.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: previewText || sentences.join(' '), ...(!previewText ? { sentences } : {}), voice: 'nova', level: article.level, mode: 'listening', speed: currentSpeed.current }) });
         if (!response.ok) throw new Error('Jenny 语音暂不可用，请再试一次。');
         const blob = await response.blob();
         if (sequence.current !== token || abort.signal.aborted) return;
