@@ -18,3 +18,14 @@
 .page{background:#f9f9f9;color:#0d0d0d}.card{background:#fff;border-color:#e5e5e5;border-radius:12px}.card:hover{background:#f9f9f9;border-color:#d4d4d8}.meta>span:first-child{background:#f0f0f0;color:#555}.generate{background:#0d0d0d;border-color:#0d0d0d;border-radius:8px;color:#fff}.sheet{background:#fff;border:1px solid #e5e5e5;border-radius:12px 12px 0 0}.sheet input{background:#f9f9f9;border-color:#e5e5e5}.actions button+button{background:#fff;border:1px solid #e5e5e5;color:#18181b}
 
 .page{background:var(--app-bg)}.card{border-color:#ebebed;border-radius:16px;box-shadow:var(--surface-shadow)}.card h2{font-size:15px;font-weight:650;line-height:1.35}.card p{color:#66666e;line-height:1.4}.card footer{padding:0;color:#66666e}.card i{background:#ededf0;color:#34343a}.sheet{border-color:#ededee;border-radius:20px 20px 0 0;box-shadow:0 -8px 32px rgba(20,20,25,.08)}
+
+/* Quiet surfaces shared with the vocabulary collection. */
+.card{border:0;border-radius:12px;background:#f0f0f2;box-shadow:none;animation:none}
+.card:hover{background:#e9e9ec}
+.cardOpen{padding:14px}
+.card h2{font-size:15px;letter-spacing:-.015em}
+.meta>span:first-child{background:#e6e6e9;color:#555560}
+.card footer{margin-top:12px}
+.header h1{font-size:23px;letter-spacing:-.025em}
+.sheet{border:0}
+.delete{color:#62626b}

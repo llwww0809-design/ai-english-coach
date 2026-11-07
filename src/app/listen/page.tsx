@@ -63,7 +63,7 @@ export default function ListenPage() {
   }
 
   return <main className={styles.page}>
-    <header className={styles.header}><div><span>SLOW ENGLISH</span><h1>慢速听读</h1></div><div className={styles.headerActions}><span className={styles.level}>{level}</span><button type="button" className={styles.generate} disabled={!ready} onClick={() => { setGenerateOpen(true); setError(''); }}>✨ 生成新篇章</button></div></header>
+    <header className={styles.header}><div><h1>慢速听读</h1></div><div className={styles.headerActions}><span className={styles.level}>{level}</span><button type="button" className={styles.generate} disabled={!ready} onClick={() => { setGenerateOpen(true); setError(''); }}>生成新篇章</button></div></header>
     {!ready ? <p className={styles.empty}>正在加载篇章…</p> : <section className={styles.grid} aria-label={`${level} 听读篇章`}>{articles.filter(article => article.level === level).map(article => <article key={article.id} className={`${styles.card} ${article.isCustom ? styles.cardCustom : ''}`}>
       <button type="button" className={styles.cardOpen} onClick={() => { setSelected(article); setNotice(''); }} aria-label={`听读 ${article.titleEn}`}>
         <div className={styles.meta}><span>{article.category}</span></div><h2 lang="en">{article.titleEn}</h2><p>{article.titleZh}</p><footer><span>{article.level} · Jenny 美音<br /><span>约 {article.duration}</span></span><i aria-hidden="true">▶</i></footer>
@@ -74,8 +74,8 @@ export default function ListenPage() {
     <p className={styles.notice} role="status">{notice}</p>
     {selected && selected.level === level && <ArticlePlayer key={selected.id} article={selected} onClose={closePlayer} />}
     {generateOpen && <div className={styles.backdrop} onClick={closeGenerate}><section ref={sheet} className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="listen-generate-title" tabIndex={-1} onClick={event => event.stopPropagation()}>
-      <header><div><span>{level} · 新的生活小品</span><h2 id="listen-generate-title">今天，想听什么？</h2></div><button type="button" onClick={closeGenerate} aria-label="关闭生成窗口">×</button></header>
-      <form onSubmit={event => { event.preventDefault(); void generate(); }}><label htmlFor="listen-topic">主题（可选）</label><input id="listen-topic" value={topic} onChange={event => setTopic(event.target.value)} maxLength={160} placeholder="如：雨天咖啡馆、周末去海边" disabled={generating} /><div className={styles.actions}><button type="submit" className={generating ? styles.creating : undefined} aria-busy={generating} disabled={generating}>{generating ? '正在创作短文...' : '✨ 生成篇章'}</button><button type="button" disabled={generating} onClick={() => void generate(true)}>随机来一篇</button></div></form>
+      <header><div><h2 id="listen-generate-title">今天，想听什么？</h2></div><button type="button" onClick={closeGenerate} aria-label="关闭生成窗口">×</button></header>
+      <form onSubmit={event => { event.preventDefault(); void generate(); }}><label htmlFor="listen-topic">主题（可选）</label><input id="listen-topic" value={topic} onChange={event => setTopic(event.target.value)} maxLength={160} placeholder="如：雨天咖啡馆、周末去海边" disabled={generating} /><div className={styles.actions}><button type="submit" className={generating ? styles.creating : undefined} aria-busy={generating} disabled={generating}>{generating ? '正在创作短文...' : '生成篇章'}</button><button type="button" disabled={generating} onClick={() => void generate(true)}>随机来一篇</button></div></form>
       <p className={styles.notice} role="status">{error || (generating ? '正在生成双语短文，可随时关闭取消。' : '')}</p>
     </section></div>}
   </main>;

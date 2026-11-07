@@ -3,3 +3,9 @@
 .page{background:#f9f9f9;color:#0d0d0d}.list,.accountCard{background:#fff;border-color:#e5e5e5;border-radius:12px}.row,.switchRow{background:#fff;border-bottom-color:#e5e5e5}.accountAvatar{background:#f0f0f0;color:#666}.accountButton{background:#0d0d0d;border-color:#0d0d0d;color:#fff}.sheet{background:#fff;border:1px solid #e5e5e5;border-radius:12px 12px 0 0}.levelOption,.levelOptionActive{border-color:#e5e5e5;border-radius:10px;background:#fff}.levelOptionActive{background:#f4f4f4;border-color:#a1a1aa}.switchRow input:checked{background:#0d0d0d;border-color:#0d0d0d}
 
 .page{background:var(--app-bg)}.list,.accountCard{border-color:#ebebed;border-radius:16px;box-shadow:var(--surface-shadow)}.row,.switchRow{border-bottom-color:#f0f0f2}.row small,.switchRow small,.accountCopy small,.storageRow small{color:#66666e}.sheet{border-radius:20px 20px 0 0;box-shadow:0 -8px 32px rgba(20,20,25,.08)}
+
+.list,.accountCard{border:0;border-radius:12px;box-shadow:none}
+.group h2{color:#62626b}
+.sheet{border:0}
+.levelOption,.levelOptionActive{border:0;background:#f4f4f5}
+.levelOptionActive{background:#e8e8eb}

@@ -128,3 +128,45 @@
 .page{background:#f9f9f9;color:#0d0d0d}.topicPack,.overviewCard,.dailyCard,.item{background:#fff;border-color:#e5e5e5;border-radius:12px}.topicPack:hover,.overviewCard:hover{background:#f9f9f9;border-color:#d4d4d8}.topicPackTop>span,.topicFilters button,.dailyTags span,.tags span{background:#f0f0f0;color:#555;border-color:#e5e5e5}.reviewButton,.continueButton,.dailyActions button:last-child,.topicActions button:last-child,.masterButton,.add form>button,.modal form>button,.reviewActions button:last-child,.complete button{background:#0d0d0d;color:#fff;border-color:#0d0d0d}.dailyActions button:first-child,.topicActions button:first-child{background:#fff;border:1px solid #e5e5e5;color:#18181b}.tabs .tabActive{color:#0d0d0d;border-color:#0d0d0d}.expandButton{background:#fff;border-color:#e5e5e5;border-radius:8px}.topicToolbar .masteryFilters{background:#f0f0f0}
 
 .page{background:var(--app-bg)}.topicPack,.overviewCard,.dailyCard,.item{border-color:#ebebed;border-radius:16px;box-shadow:var(--surface-shadow)}.overviewGrid,.topicGrid{gap:10px}.overviewWord strong{font-weight:650}.overviewWord small,.topicPack p{color:#66666e}.topicPackTop>span{background:#ededef;color:#555560;font-weight:600}.tabs button{font-size:12px}.dailyCard h2,.topicWordHeading h2{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-weight:650}.sound:active,.topicSound:active,.overviewSound:active,.dailySound:active,.exampleSound:active{transform:scale(.88)}
+
+.dailyHeading h2,.bankHeading h2,.topicIntro h2{margin:0;font-size:18px;line-height:1.4}
+.dailyHeading>strong{font-size:20px;font-variant-numeric:tabular-nums}
+.dailyCard,.topicWordCard{border:0;border-radius:12px;background:#fff;box-shadow:none}
+.dailyCard{padding:24px 20px 20px}
+.dailyCard h2{margin:16px 0 6px;font-size:30px;line-height:1.2}
+.dailyCard>strong{color:#44444b}
+.dailyDetails{padding:14px 0;border-color:#ededee}
+.detailLabel{color:#65656e;font-size:11px}
+.dailyTags span,.tags span{border:0;background:#f1f1f3;color:#4b4b53;font-size:11px}
+.dailySound,.exampleSound,.topicSound{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;background:#f1f1f3;color:#45454e}
+.dailySound{min-height:36px;padding:0 12px;font-size:12px}
+.exampleSound,.topicSound{min-width:36px;min-height:36px}
+.dailyActions,.topicActions{margin-top:18px}
+.dailyActions button,.topicActions button{min-height:52px;font-size:13px;font-weight:600}
+.dailyActions small,.topicActions small{font-size:10px;font-weight:400}
+.topicGrid,.overviewGrid{gap:10px;padding:0}
+.topicPack,.overviewCard,.item{border:0;border-radius:12px;background:#f0f0f2;box-shadow:none}
+.topicPack{min-height:122px;padding:15px}
+.topicPack:hover,.overviewCard:hover{background:#e9e9ec}
+.topicPackTop strong{font-size:14px;line-height:1.4}
+.topicPack p{margin:7px 0 14px;font-size:11px;line-height:1.5}
+.topicPack>small{font-size:10px;color:#65656e}
+.overviewWord{min-height:82px;padding:14px 38px 14px 14px}
+.overviewWord small{color:#65656e}
+.overviewSound{top:6px;right:5px;width:36px;height:36px;color:#555560}
+.wordKnown{background:#ebebed}
+.topicFilters button{border:0;background:transparent;color:#62626b;font-size:11px}
+.topicFilters .topicFilterActive{background:#e9e9ec;color:#18181b;font-weight:600}
+.tabs button small{color:#71717a}
+.topicPack:focus-visible,.overviewWord:focus-visible{outline:2px solid #555560;outline-offset:-3px}
+@media(max-width:360px){.dailyCard{padding:20px 16px}.topicPack{padding:12px}.topicPackTop strong{font-size:13px}}
+.example,.exampleBlock p,.topicExample p{font-family:inherit;font-size:14px;line-height:1.65}
+.exampleZh,.exampleBlock>small,.topicExample>small{color:#65656e;font-size:12px;line-height:1.6}
+.dailyCard>p,.topicWordHeading span{color:#65656e;font-size:12px}
+.dailyActions button:first-child,.topicActions button:first-child{border:0;background:#f0f0f2}
+.dailyActions small,.topicActions small{color:inherit;opacity:.8}
+.topicPackProgress{background:#dedee3}
+.topicPackProgress i{background:#555560}
+.tabs button{color:#65656e}
+.tabs .tabActive{color:#18181b}
+.page .topicWordCard{animation:none}

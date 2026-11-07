@@ -1,4 +1,5 @@
 'use client';
+import { SoundIcon } from '@/components/sound-icon';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useListeningAudio } from '@/hooks/use-listening-audio';
@@ -64,10 +65,10 @@ export function ArticlePlayer({ article, onClose }: { article: SlowArticle; onCl
       </header>
       {word ? <>
         <div className={styles.wordDetail}>
-          <button type="button" className={styles.sound} disabled={audio.state === 'loading'} aria-busy={audio.state === 'loading'} onClick={() => audio.preview(word.word)}>{audio.state === 'loading' ? <span className="audioSpinner" aria-hidden="true" /> : '🔊'} Jenny 发音</button>
+          <button type="button" className={styles.sound} disabled={audio.state === 'loading'} aria-busy={audio.state === 'loading'} onClick={() => audio.preview(word.word)}>{audio.state === 'loading' ? <span className="audioSpinner" aria-hidden="true" /> : <SoundIcon />} Jenny 发音</button>
           <section><h3>中文释义</h3><p>{word.translation}</p></section>
           <section><h3>常用搭配 · {word.level}</h3><div className={styles.tags}>{word.collocations.map(tag => <span key={tag}>{tag}</span>)}</div></section>
-          <section><h3>原文语境 <button type="button" className={styles.sound} aria-label="朗读原文例句" disabled={audio.state === 'loading'} aria-busy={audio.state === 'loading'} onClick={() => audio.preview(word.exampleEn)}>{audio.state === 'loading' ? <span className="audioSpinner" aria-hidden="true" /> : '🔊'}</button></h3><p lang="en">{word.exampleEn}</p><small>{word.exampleZh}</small></section>
+          <section><h3>原文语境 <button type="button" className={styles.sound} aria-label="朗读原文例句" disabled={audio.state === 'loading'} aria-busy={audio.state === 'loading'} onClick={() => audio.preview(word.exampleEn)}>{audio.state === 'loading' ? <span className="audioSpinner" aria-hidden="true" /> : <SoundIcon />}</button></h3><p lang="en">{word.exampleEn}</p><small>{word.exampleZh}</small></section>
         </div>
         <footer className={styles.wordFooter}><button type="button" disabled={saved} onClick={save}>{saved ? '✓ 已加入我的词库' : '+ 加入我的词库'}</button><button type="button" className={styles.secondary} onClick={closeWord}>返回听读</button></footer>
       </> : <>

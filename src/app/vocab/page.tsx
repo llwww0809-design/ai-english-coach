@@ -28,6 +28,11 @@ import { getChatAudio, primeChatAudio } from '@/lib/chat-audio';
 import styles from './vocab.module.css';
 import drawer from './vocab-drawer.module.css';
 import { OcrVocab } from '@/components/ocr-vocab';
+import { SoundIcon } from '@/components/sound-icon';
+
+function topicLabel(title: string) {
+  return title.replace(/^[^\p{L}\p{N}]+/u, '');
+}
 
 type View = 'daily' | 'topics' | 'bank';
 type TopicCategory = 'all' | TopicPack['category'];
@@ -377,7 +382,7 @@ export default function VocabPage() {
   return <main className={styles.page}>
     <header className={styles.header}>
       <Link href="/teacher" aria-label="返回对话">←</Link>
-      <div><span>EVERYDAY ENGLISH · {level}</span><h1>口语词库</h1></div>
+      <div><h1>口语词库</h1></div>
       <div className={styles.headerActions}>
         <OcrVocab level={level} suspended={Boolean(selectedItem)} onClose={stopSpeech} onWord={item => { stopSpeech(); setSelectedTopicId(null); setPhotoDetail(true); setSelectedItem(item); setNotice(''); }} />
       </div>
@@ -391,16 +396,16 @@ export default function VocabPage() {
 
     {(!ready || (view === 'daily' && !dailyReady)) && <p className={styles.loading} role="status">正在恢复学习进度…</p>}
     {dailyReady && view === 'daily' && <section className={styles.daily}>
-      <div className={styles.dailyHeading}><div><span className={styles.eyebrow}>DAILY RECOMMENDATION</span><h2>今日推荐 · {level} 等级</h2></div><strong>{dailyState.exhausted ? '已通关' : <>{Math.min(completed, 10)}<small>/10</small></>}</strong></div>
+      <div className={styles.dailyHeading}><div><h2>今日推荐 · {level} 等级</h2></div><strong>{dailyState.exhausted ? '已通关' : <>{Math.min(completed, 10)}<small>/10</small></>}</strong></div>
       {!dailyState.exhausted && <div className={styles.progress}><i style={{ width: `${Math.min(completed, 10) * 10}%` }} /></div>}
-      {dailyState.exhausted ? <div className={styles.complete}><span>🎉</span><h2>本等级核心推荐词已全部刷完！</h2><p>可前往个人中心进阶至更高难度。剩余未学词不足 10 个时不再凑批推荐，已学词不会重复出现。</p><Link href="/profile">前往个人中心 ↗</Link></div> : completed >= 10 || !current ? <div className={styles.complete}><span>✓</span><h2>今日推荐已完成</h2><p>认识的词已跳过，生词已归入待攻克词库。</p><button type="button" onClick={() => setView('bank')}>查看我的词库 ↗</button></div> : <div className={styles.dailyCard}>
+      {dailyState.exhausted ? <div className={styles.complete}><span aria-hidden="true">✓</span><h2>本等级核心推荐词已全部刷完！</h2><p>可前往个人中心进阶至更高难度。剩余未学词不足 10 个时不再凑批推荐，已学词不会重复出现。</p><Link href="/profile">前往个人中心 ↗</Link></div> : completed >= 10 || !current ? <div className={styles.complete}><span>✓</span><h2>今日推荐已完成</h2><p>认识的词已跳过，生词已归入待攻克词库。</p><button type="button" onClick={() => setView('bank')}>查看我的词库 ↗</button></div> : <div className={styles.dailyCard}>
         <small>第 {Math.min(completed + 1, 10)} / 10 个</small><h2>{current.word}</h2><p>{current.phonetic}</p><strong>{current.translation}</strong>
         <section className={styles.dailyDetails} aria-label="词汇用法">
           <div className={styles.collocationBlock}><span className={styles.detailLabel}>常用搭配</span><div className={styles.dailyTags}>{current.collocations.slice(0, 3).map(tag => <span key={tag}>{tag}</span>)}</div></div>
-          <div className={styles.exampleBlock}><div className={styles.exampleHeading}><span className={styles.detailLabel}>地道例句</span><button type="button" className={styles.exampleSound} disabled={loadingKey !== null} aria-busy={loadingKey === `example-${current.id}`} onClick={() => void speak(`example-${current.id}`, current.exampleEn)} aria-label={`朗读例句：${current.exampleEn}`}>{loadingKey === `example-${current.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `example-${current.id}` ? '■' : '🔊'}</button></div><p lang="en">{current.exampleEn}</p><small>{current.exampleZh}</small></div>
+          <div className={styles.exampleBlock}><div className={styles.exampleHeading}><span className={styles.detailLabel}>地道例句</span><button type="button" className={styles.exampleSound} disabled={loadingKey !== null} aria-busy={loadingKey === `example-${current.id}`} onClick={() => void speak(`example-${current.id}`, current.exampleEn)} aria-label={`朗读例句：${current.exampleEn}`}>{loadingKey === `example-${current.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `example-${current.id}` ? '■' : <SoundIcon />}</button></div><p lang="en">{current.exampleEn}</p><small>{current.exampleZh}</small></div>
         </section>
-        <button type="button" className={styles.dailySound} disabled={loadingKey !== null} aria-busy={loadingKey === `daily-${current.id}`} onClick={() => void speak(`daily-${current.id}`, current.word)}>{loadingKey === `daily-${current.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `daily-${current.id}` ? '■ 停止' : '🔊 朗读单词'}</button>
-        <div className={styles.dailyActions}><button type="button" onClick={addCurrent}>😵 不认识<br /><small>加入词库</small></button><button type="button" onClick={() => nextDaily('passed')}>😎 认识<br /><small>Pass</small></button></div>
+        <button type="button" className={styles.dailySound} disabled={loadingKey !== null} aria-busy={loadingKey === `daily-${current.id}`} onClick={() => void speak(`daily-${current.id}`, current.word)}>{loadingKey === `daily-${current.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `daily-${current.id}` ? '■ 停止' : <><SoundIcon /> 朗读单词</>}</button>
+        <div className={styles.dailyActions}><button type="button" onClick={addCurrent}>不认识<br /><small>加入词库</small></button><button type="button" onClick={() => nextDaily('passed')}>认识<br /><small>Pass</small></button></div>
       </div>}
     </section>}
 
@@ -408,7 +413,7 @@ export default function VocabPage() {
       {activePack && activePack.words.every(word => word.level === level) ? topicMode === 'overview' ? <div className={styles.topicOverview}>
         <div className={styles.overviewHeading}>
           <button type="button" className={styles.packBack} onClick={() => switchView('topics')} aria-label="返回主题词包">←</button>
-          <div><h2>{activePack.title} · {level}</h2><p>已掌握 {knownCount(activePack)} / {activePack.words.length}</p></div>
+          <div><h2>{topicLabel(activePack.title)} · {level}</h2><p>已掌握 {knownCount(activePack)} / {activePack.words.length}</p></div>
           <button type="button" className={styles.continueButton} onClick={() => startPack(activePack)}>▶ 连续刷词</button>
         </div>
         <div className={styles.topicProgress} role="progressbar" aria-label="场景掌握进度" aria-valuemin={0} aria-valuemax={activePack.words.length} aria-valuenow={knownCount(activePack)}><i style={{ width: `${knownCount(activePack) / activePack.words.length * 100}%` }} /></div>
@@ -417,7 +422,7 @@ export default function VocabPage() {
             <button type="button" aria-pressed={topicFilter === 'unmastered'} onClick={() => setTopicFilter('unmastered')}>未掌握 {activePack.words.length - knownCount(activePack)}</button>
             <button type="button" aria-pressed={topicFilter === 'all'} onClick={() => setTopicFilter('all')}>全部 {activePack.words.length}</button>
           </div>
-          <button type="button" className={styles.expandButton} disabled={expanding} aria-busy={expanding} aria-label={expanding ? '正在生成场景新词' : 'AI 扩充场景新词'} onClick={() => void expandPack()}>{expanding ? '生成中…' : '✨ 扩充'}</button>
+          <button type="button" className={styles.expandButton} disabled={expanding} aria-busy={expanding} aria-label={expanding ? '正在生成场景新词' : 'AI 扩充场景新词'} onClick={() => void expandPack()}>{expanding ? '生成中…' : '扩充新词'}</button>
         </div>
         {expansionStatus && <p className={styles.expansionStatus} role="status">{expansionStatus}</p>}
         {!visibleTopicWords.length && <div className={styles.masteryEmpty}><strong>这一场景的词都掌握了 ✓</strong><p>可扩充新词继续练习，或查看全部词汇复习。</p><button type="button" onClick={() => setTopicFilter('all')}>查看全部词汇</button></div>}
@@ -425,26 +430,26 @@ export default function VocabPage() {
           const known = topicProgress[activePack.id]?.includes(word.id);
           return <article key={word.id} className={`${styles.overviewCard} ${known ? styles.wordKnown : ''} ${leavingTopicIds.includes(word.id) ? styles.wordLeaving : ''}`}>
             <button type="button" className={styles.overviewWord} disabled={leavingTopicIds.includes(word.id)} onClick={() => { setSelectedTopicId(activePack.id); setSelectedItem(word); }} aria-label={`查看 ${word.word} 详情`}><strong lang="en">{word.word}</strong><small>{word.translation}</small>{known && <span className={styles.knownMark}>✓ 已掌握</span>}</button>
-            <button type="button" className={styles.overviewSound} disabled={loadingKey !== null || leavingTopicIds.includes(word.id)} aria-busy={loadingKey === `list-${word.id}`} onClick={() => void speak(`list-${word.id}`, word.word)} aria-label={`朗读 ${word.word}`}>{loadingKey === `list-${word.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `list-${word.id}` ? '■' : '🔊'}</button>
+            <button type="button" className={styles.overviewSound} disabled={loadingKey !== null || leavingTopicIds.includes(word.id)} aria-busy={loadingKey === `list-${word.id}`} onClick={() => void speak(`list-${word.id}`, word.word)} aria-label={`朗读 ${word.word}`}>{loadingKey === `list-${word.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `list-${word.id}` ? '■' : <SoundIcon />}</button>
           </article>;
         })}</div>
       </div> : <div className={styles.topicPractice}>
-        <div className={styles.topicPracticeHeader}><button type="button" onClick={() => openPack(activePack)} aria-label="返回场景清单">←</button><div><span>{level} · {activePack.title}</span><strong>{knownCount(activePack)} / {activePack.words.length} 已掌握 · 语速跟随当前 {level}</strong></div></div>
+        <div className={styles.topicPracticeHeader}><button type="button" onClick={() => openPack(activePack)} aria-label="返回场景清单">←</button><div><span>{level} · {topicLabel(activePack.title)}</span><strong>{knownCount(activePack)} / {activePack.words.length} 已掌握 · 语速跟随当前 {level}</strong></div></div>
         <div className={styles.topicProgress}><i style={{ width: `${(knownCount(activePack) / activePack.words.length) * 100}%` }} /></div>
         {topicIndex >= activePack.words.length || !topicCurrent ? <div className={styles.complete}><span>✓</span><h2>这组词练完了</h2><p>已掌握进度已保存，未掌握的词可以再次练习。</p><div className={styles.completeActions}><button type="button" onClick={() => startPack(activePack)}>再练未掌握</button><button type="button" onClick={() => openPack(activePack)}>返回场景清单</button></div></div> : <article className={styles.topicWordCard} key={`${activePack.id}-${topicIndex}`}>
-          <div className={styles.topicWordHeading}><div><h2>{topicCurrent.word}</h2><span>{topicCurrent.phonetic}</span></div><button type="button" className={styles.topicSound} disabled={loadingKey !== null} aria-busy={loadingKey === `topic-${topicCurrent.id}`} onClick={() => void speak(`topic-${topicCurrent.id}`, topicCurrent.word)} aria-label={`朗读 ${topicCurrent.word}`}>{loadingKey === `topic-${topicCurrent.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `topic-${topicCurrent.id}` ? '■' : '🔊'}</button></div>
+          <div className={styles.topicWordHeading}><div><h2>{topicCurrent.word}</h2><span>{topicCurrent.phonetic}</span></div><button type="button" className={styles.topicSound} disabled={loadingKey !== null} aria-busy={loadingKey === `topic-${topicCurrent.id}`} onClick={() => void speak(`topic-${topicCurrent.id}`, topicCurrent.word)} aria-label={`朗读 ${topicCurrent.word}`}>{loadingKey === `topic-${topicCurrent.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `topic-${topicCurrent.id}` ? '■' : <SoundIcon />}</button></div>
           <p className={styles.topicTranslation}>{topicCurrent.translation}</p>
           <div className={styles.topicCollocations}><span className={styles.detailLabel}>常用搭配</span><div className={styles.dailyTags}>{topicCurrent.collocations.slice(0, 3).map(tag => <span key={tag}>{tag}</span>)}</div></div>
-          <div className={styles.topicExample}><div className={styles.exampleHeading}><span className={styles.detailLabel}>地道例句</span><button type="button" className={styles.exampleSound} disabled={loadingKey !== null} aria-busy={loadingKey === `topic-example-${topicCurrent.id}`} onClick={() => void speak(`topic-example-${topicCurrent.id}`, topicCurrent.exampleEn)} aria-label="朗读例句">{loadingKey === `topic-example-${topicCurrent.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `topic-example-${topicCurrent.id}` ? '■' : '🔊'}</button></div><p lang="en">{topicCurrent.exampleEn}</p><small>{topicCurrent.exampleZh}</small></div>
-          <div className={styles.topicActions}><button type="button" onClick={addTopicWord}>😵 不认识<small>加入待攻克</small></button><button type="button" onClick={passTopicWord}>😎 认识<small>Pass 并记住</small></button></div>
+          <div className={styles.topicExample}><div className={styles.exampleHeading}><span className={styles.detailLabel}>地道例句</span><button type="button" className={styles.exampleSound} disabled={loadingKey !== null} aria-busy={loadingKey === `topic-example-${topicCurrent.id}`} onClick={() => void speak(`topic-example-${topicCurrent.id}`, topicCurrent.exampleEn)} aria-label="朗读例句">{loadingKey === `topic-example-${topicCurrent.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `topic-example-${topicCurrent.id}` ? '■' : <SoundIcon />}</button></div><p lang="en">{topicCurrent.exampleEn}</p><small>{topicCurrent.exampleZh}</small></div>
+          <div className={styles.topicActions}><button type="button" onClick={addTopicWord}>不认识<small>加入待攻克</small></button><button type="button" onClick={passTopicWord}>认识<small>Pass 并记住</small></button></div>
         </article>}
       </div> : <>
-        <div className={styles.topicIntro}><span className={styles.eyebrow}>PICK A TOPIC</span><h2>按场景自由练词</h2></div>
+        <div className={styles.topicIntro}><h2>按场景自由练词</h2></div>
         <div className={styles.topicFilters} aria-label="按分类筛选">{categories.map(item => <button type="button" key={item.id} aria-pressed={category === item.id} className={category === item.id ? styles.topicFilterActive : ''} onClick={() => setCategory(item.id)}>{item.label}</button>)}</div>
         <div className={styles.topicGrid}>{visiblePacks.map(pack => {
           const count = knownCount(pack);
           return <button type="button" className={styles.topicPack} key={pack.id} onClick={() => openPack(pack)}>
-            <div className={styles.topicPackTop}><strong>{pack.title}</strong></div>
+            <div className={styles.topicPackTop}><strong>{topicLabel(pack.title)}</strong></div>
             <p>{pack.subtitle}</p>
             <small>共 {pack.words.length} 词 · 已掌握 {count}</small>
             <div className={styles.topicPackProgress}><i style={{ width: `${(count / pack.words.length) * 100}%` }} /></div>
@@ -453,20 +458,20 @@ export default function VocabPage() {
       </>}
     </section>}
 
-    {view === 'bank' && <section className={styles.bank}><div className={styles.bankHeading}><div><span className={styles.eyebrow}>MY VOCABULARY</span><h2>待攻克词库</h2></div><span>{bank.length} 个待攻克 · {mastered} 个已掌握</span></div>{bank.length ? <div className={drawer.wordGrid}>{bank.map(item => <button type="button" className={drawer.wordCard} key={item.id} onClick={() => { setSelectedTopicId(null); setSelectedItem(item); }}><b>{item.word}</b><small>{item.translation}</small></button>)}</div> : <div className={styles.empty}>词库空空如也，在今日推荐或对话中收集生词吧</div>}</section>}
+    {view === 'bank' && <section className={styles.bank}><div className={styles.bankHeading}><div><h2>待攻克词库</h2></div><span>{bank.length} 个待攻克 · {mastered} 个已掌握</span></div>{bank.length ? <div className={drawer.wordGrid}>{bank.map(item => <button type="button" className={drawer.wordCard} key={item.id} onClick={() => { setSelectedTopicId(null); setSelectedItem(item); }}><b>{item.word}</b><small>{item.translation}</small></button>)}</div> : <div className={styles.empty}>词库空空如也，在今日推荐或对话中收集生词吧</div>}</section>}
 
     {selectedItem && <div className={drawer.sheetBackdrop} role="presentation" onClick={closeDetail}>
       <section ref={sheetRef} tabIndex={-1} className={drawer.bottomSheet} role="dialog" aria-modal="true" aria-labelledby="vocab-detail-title" onClick={event => event.stopPropagation()}>
         <div className={drawer.sheetHandle} />
         <header className={drawer.sheetHeader}>
           <div><h2 id="vocab-detail-title">{selectedItem.word}</h2><span>{selectedItem.phonetic || '美音音标待补充'}</span></div>
-          <button type="button" className={drawer.sheetSpeak} disabled={loadingKey !== null} aria-busy={loadingKey === `detail-${selectedItem.id}`} onClick={() => void speak(`detail-${selectedItem.id}`, selectedItem.word)} aria-label={`朗读 ${selectedItem.word}`}>{loadingKey === `detail-${selectedItem.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `detail-${selectedItem.id}` ? '■' : '🔊'}</button>
+          <button type="button" className={drawer.sheetSpeak} disabled={loadingKey !== null} aria-busy={loadingKey === `detail-${selectedItem.id}`} onClick={() => void speak(`detail-${selectedItem.id}`, selectedItem.word)} aria-label={`朗读 ${selectedItem.word}`}>{loadingKey === `detail-${selectedItem.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `detail-${selectedItem.id}` ? '■' : <SoundIcon />}</button>
           <button type="button" className={drawer.sheetClose} onClick={closeDetail} aria-label="关闭详情">×</button>
         </header>
         <div className={drawer.sheetContent}>
           <section><h3>中文释义</h3><p className={styles.translation}>{selectedItem.translation}</p></section>
           <section><h3>常用搭配</h3><div className={styles.tags}>{selectedItem.collocations.map(tag => <span key={tag}>{tag}</span>)}</div></section>
-          <section><div className={styles.exampleHeading}><h3>{photoDetail ? '真实语境例句' : '口语例句'} · {selectedItem.level}</h3><button type="button" className={styles.exampleSound} disabled={loadingKey !== null} aria-busy={loadingKey === `detail-example-${selectedItem.id}`} onClick={() => void speak(`detail-example-${selectedItem.id}`, selectedItem.exampleEn)} aria-label="朗读详情例句">{loadingKey === `detail-example-${selectedItem.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `detail-example-${selectedItem.id}` ? '■' : '🔊'}</button></div><p className={styles.example} lang="en">{selectedItem.exampleEn}</p><p className={styles.exampleZh}>{selectedItem.exampleZh}</p></section>
+          <section><div className={styles.exampleHeading}><h3>{photoDetail ? '真实语境例句' : '口语例句'} · {selectedItem.level}</h3><button type="button" className={styles.exampleSound} disabled={loadingKey !== null} aria-busy={loadingKey === `detail-example-${selectedItem.id}`} onClick={() => void speak(`detail-example-${selectedItem.id}`, selectedItem.exampleEn)} aria-label="朗读详情例句">{loadingKey === `detail-example-${selectedItem.id}` ? <span className="audioSpinner" aria-hidden="true" /> : speaking === `detail-example-${selectedItem.id}` ? '■' : <SoundIcon />}</button></div><p className={styles.example} lang="en">{selectedItem.exampleEn}</p><p className={styles.exampleZh}>{selectedItem.exampleZh}</p></section>
         </div>
         <footer className={`${drawer.sheetFooter} ${selectedTopicId ? drawer.sheetActions : ''}`}>
           {photoDetail ? <button type="button" disabled={bank.some(item => item.level === selectedItem.level && item.word.toLowerCase() === selectedItem.word.toLowerCase())} onClick={addDetailToBank}>{bank.some(item => item.level === selectedItem.level && item.word.toLowerCase() === selectedItem.word.toLowerCase()) ? '✓ 已收藏' : '+ 加入我的词库'}</button> : selectedTopicId ? <>
