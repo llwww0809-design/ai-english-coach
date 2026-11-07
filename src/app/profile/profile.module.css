@@ -9,3 +9,15 @@
 .sheet{border:0}
 .levelOption,.levelOptionActive{border:0;background:#f4f4f5}
 .levelOptionActive{background:#e8e8eb}
+
+.list,.accountCard{background:var(--surface-primary);box-shadow:var(--surface-shadow)}
+.row,.switchRow{background:var(--surface-primary)}
+@media(max-width:350px){.themeRow{align-items:flex-start;flex-direction:column}.themeRow .segment{width:100%}.themeRow .segment button{flex:1}}
+:global(html[data-theme='dark']) .page{color:var(--text-primary)}
+:global(html[data-theme='dark']) .header,:global(html[data-theme='dark']) .row,:global(html[data-theme='dark']) .switchRow,:global(html[data-theme='dark']) .storageRow{border-color:var(--border-subtle)}
+:global(html[data-theme='dark']) .group h2,:global(html[data-theme='dark']) .row small,:global(html[data-theme='dark']) .switchRow small,:global(html[data-theme='dark']) .accountCopy small,:global(html[data-theme='dark']) .storageRow small{color:var(--text-secondary)}
+:global(html[data-theme='dark']) .segment,:global(html[data-theme='dark']) .avatar,:global(html[data-theme='dark']) .accountAvatar,:global(html[data-theme='dark']) .levelOption,:global(html[data-theme='dark']) .levelOptionActive,:global(html[data-theme='dark']) .storageRow button{background:var(--surface-secondary);color:var(--text-primary)}
+:global(html[data-theme='dark']) .segmentActive{background:#46515e!important;color:#fff!important}
+:global(html[data-theme='dark']) .sheet,:global(html[data-theme='dark']) .reset{background:var(--surface-primary);color:var(--text-primary)}
+:global(html[data-theme='dark']) .field input{background:var(--surface-secondary);border-color:var(--border-subtle);color:var(--text-primary)}
+:global(html[data-theme='dark']) .accountButton,:global(html[data-theme='dark']) .primary{background:#e6edf3;color:#161b22;border-color:#e6edf3}

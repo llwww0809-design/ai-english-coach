@@ -29,3 +29,13 @@
 .header h1{font-size:23px;letter-spacing:-.025em}
 .sheet{border:0}
 .delete{color:#62626b}
+.card{background:var(--surface-primary);border:1px solid var(--border-subtle);box-shadow:var(--surface-shadow)}
+:global(html[data-theme='dark']) .page{color:var(--text-primary)}
+:global(html[data-theme='dark']) .header h1{color:var(--text-primary)}
+:global(html[data-theme='dark']) .header{border-color:var(--border-subtle)}
+:global(html[data-theme='dark']) .card{color:var(--text-primary)}
+:global(html[data-theme='dark']) .card:hover,:global(html[data-theme='dark']) .meta>span:first-child,:global(html[data-theme='dark']) .card i,:global(html[data-theme='dark']) .headerActions .level{background:var(--surface-secondary);color:var(--text-secondary)}
+:global(html[data-theme='dark']) .card p,:global(html[data-theme='dark']) .card footer,:global(html[data-theme='dark']) .delete{color:var(--text-secondary)}
+:global(html[data-theme='dark']) .sheet{background:var(--surface-primary);color:var(--text-primary)}
+:global(html[data-theme='dark']) .sheet input,:global(html[data-theme='dark']) .actions button+button{background:var(--surface-secondary);color:var(--text-primary);border-color:var(--border-subtle)}
+:global(html[data-theme='dark']) .generate,:global(html[data-theme='dark']) .actions button:first-child{background:#e6edf3;color:#161b22;border-color:#e6edf3}

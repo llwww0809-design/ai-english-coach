@@ -210,3 +210,10 @@
 .bottomSheet{border:0;border-radius:20px 20px 0 0}
 .sheetHeader span{color:#65656e;font-size:12px}
 .sheetFooter .secondaryAction{border:0;background:#f0f0f2}
+.wordCard{background:var(--surface-primary);border:1px solid var(--border-subtle);box-shadow:var(--surface-shadow)}
+:global(html[data-theme='dark']) .wordCard,:global(html[data-theme='dark']) .bottomSheet{background:var(--surface-primary);color:var(--text-primary)}
+:global(html[data-theme='dark']) .wordCard:hover,:global(html[data-theme='dark']) .sheetSpeak,:global(html[data-theme='dark']) .sheetClose,:global(html[data-theme='dark']) .sheetFooter .secondaryAction{background:var(--surface-secondary);color:var(--text-primary)}
+:global(html[data-theme='dark']) .sheetHeader{border-color:var(--border-subtle)}
+:global(html[data-theme='dark']) .sheetHeader h2{color:var(--text-primary)}
+:global(html[data-theme='dark']) .wordCard small,:global(html[data-theme='dark']) .sheetContent h3,:global(html[data-theme='dark']) .sheetHeader span{color:var(--text-secondary)}
+:global(html[data-theme='dark']) .sheetFooter button{background:#e6edf3;color:#161b22}

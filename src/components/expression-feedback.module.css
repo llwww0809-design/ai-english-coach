@@ -7,3 +7,6 @@
 .status{margin-top:5px;font-size:9px;line-height:1.4;color:#989898}
 .suggestionLine{display:flex;align-items:flex-start;gap:5px}.suggestionLine .english{flex:1}.saveButton{width:22px;height:22px;flex:0 0 22px;border:1px solid #d8d8d8;border-radius:6px;background:#ffffffa6;color:#727272;font-size:13px;line-height:1;cursor:pointer}.saveButton:hover{background:#ededed}.saveButton.saved{background:#e5e5e5;color:#0d0d0d;cursor:default}
 @media(prefers-reduced-motion:reduce){.arrow{transition:none}}
+:global([data-theme='dark']) .card{background:var(--surface-secondary);border-color:var(--border-soft);color:var(--text-secondary)}
+:global([data-theme='dark']) .english{color:var(--text-primary)}
+:global([data-theme='dark']) .badge,:global([data-theme='dark']) .saveButton{background:var(--surface-primary);border-color:var(--border-soft);color:var(--text-primary)}

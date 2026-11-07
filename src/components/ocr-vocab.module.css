@@ -12,3 +12,8 @@
 @keyframes enter{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.panel,.spinner{animation:none}}
+:global([data-theme='dark']) .camera,:global([data-theme='dark']) .preview button,:global([data-theme='dark']) .retry{background:var(--surface-secondary);border-color:var(--border-soft);color:var(--text-primary)}
+:global([data-theme='dark']) .panel{background:var(--surface-primary);color:var(--text-primary)}
+:global([data-theme='dark']) .heading button{color:var(--text-primary)}
+:global([data-theme='dark']) .text{border-color:var(--border-soft)}
+:global([data-theme='dark']) .wordToken:hover,:global([data-theme='dark']) .wordToken:focus-visible{background:var(--surface-secondary);color:var(--text-primary)}

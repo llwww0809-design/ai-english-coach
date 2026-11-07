@@ -4,3 +4,7 @@
 .nav{background:rgba(255,255,255,.86);border-color:rgba(35,35,40,.08);backdrop-filter:blur(18px) saturate(1.15);-webkit-backdrop-filter:blur(18px) saturate(1.15)}
 .nav a{position:relative;color:#77777f;transition:color .2s ease,transform .2s ease}.nav a:active{transform:scale(.94)}.nav .active{color:#17171a}.nav .active::before{content:'';position:absolute;top:0;width:20px;height:2px;border-radius:2px;background:#3f3f46;opacity:.65}.nav small{font-size:11px;line-height:1.2}
 @media(min-width:761px){.nav{box-shadow:0 2px 8px rgba(20,20,25,.04),0 12px 32px rgba(20,20,25,.06)}}
+:global(html[data-theme='dark']) .nav{background:rgba(22,27,34,.92);border-color:var(--border-subtle)}
+:global(html[data-theme='dark']) .nav a{color:#a6b0bc}
+:global(html[data-theme='dark']) .nav .active{color:#f0f6fc}
+:global(html[data-theme='dark']) .nav .active::before{background:#e6edf3}
