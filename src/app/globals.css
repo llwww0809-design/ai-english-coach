@@ -10,3 +10,8 @@ button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation
 .audioSpinner{display:inline-block;width:12px;height:12px;border:1.5px solid currentColor;border-right-color:transparent;border-radius:50%;vertical-align:-1px;animation:audioSpin .8s linear infinite}button[aria-busy="true"]{cursor:wait}@keyframes audioSpin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.audioSpinner{animation:none}}
 
 :root{--app-bg:#f9f9f9;--surface-primary:#ffffff;--surface-secondary:#f4f4f4;--text-primary:#0d0d0d;--text-secondary:#71717a;--text-placeholder:#a1a1aa;--border-subtle:#e5e5e5}html,body{background:var(--app-bg);color:var(--text-primary)}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline-color:#71717a}
+
+:root{--app-bg:#f8f8f9;--surface-primary:#fff;--surface-secondary:#f1f1f3;--text-primary:#18181b;--text-secondary:#65656e;--border-subtle:#e7e7e9;--surface-shadow:0 1px 2px rgba(20,20,25,.035),0 8px 24px rgba(20,20,25,.035)}
+body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:#dcdde2;color:#18181b}input,textarea{caret-color:#34343b}button,a{transition:background-color .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}button:active{transform:scale(.97)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
